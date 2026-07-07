@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Интернет для REST + WebSocket -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Push-уведомления (FCM) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Для выбора фото профиля -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <application
+        android:name=".NexoryApp"
+        android:label="Nexory"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.Nexory"
+        android:usesCleartextTraffic="true"
+        android:allowBackup="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- FCM сервис для приёма push-уведомлений -->
+        <service
+            android:name=".service.NexoryFcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>
