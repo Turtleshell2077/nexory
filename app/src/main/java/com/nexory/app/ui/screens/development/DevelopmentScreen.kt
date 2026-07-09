@@ -3,6 +3,8 @@ package com.nexory.app.ui.screens.development
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,8 +38,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import androidx.compose.material3.ExperimentalMaterial3Api
 
-// ⚠️ ВЛАДЕЛЬЦУ: укажите свои реквизиты для перевода по СБП (номер телефона + банк).
-// Перевод по номеру телефона через СБП анонимен и не требует привязки карт от отправителя.
+// ⚠️ ВЛАДЕЛЬЦУ:
+// 1) DONATION_URL — ссылка для приёма перевода по СБП. Открывается платёжная
+//    страница, где пользователь выбирает свой банк и переводит — твой номер НЕ показывается.
+//    В Т-банке такую ссылку можно сделать в разделе «Собрать деньги» / «Мне переведут».
+//    Пример вида: https://www.tinkoff.ru/rm/xxxxx
+// 2) SBP_PHONE/SBP_BANK — запасной вариант (перевод по номеру), показывается по кнопке.
+private const val DONATION_URL = "https://www.tinkoff.ru/rm/"
 private const val SBP_PHONE = "+7 985 144 88 24"
 private const val SBP_BANK  = "Т-банк"
 
@@ -132,26 +139,7 @@ fun DevelopmentScreen(
                 }
             }
 
-            // Дорожная карта
-            SectionTitle("Что хотим улучшить")
-            ROADMAP.forEach { r ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(NexoryColors.SurfaceDark)
-                        .padding(14.dp),
-                ) {
-                    Text(r.icon, fontSize = 22.sp)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(r.title, color = NexoryColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                        Text(r.text, color = NexoryColors.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp)
-                    }
-                }
-            }
-
-            // Поддержать проект
+            // Поддержать проект — сначала
             SectionTitle("Поддержать проект")
             Column(
                 modifier = Modifier
@@ -160,32 +148,67 @@ fun DevelopmentScreen(
                     .background(NexoryColors.SurfaceDark)
                     .padding(16.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Favorite, null, tint = NexoryColors.Error, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Донат по СБП", color = NexoryColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                }
-                Spacer(Modifier.height(8.dp))
                 Text(
-                    "Перевод по номеру телефона через СБП — быстро, анонимно и без привязки карт. " +
-                        "Любая сумма помогает развитию проекта. Спасибо! 💙",
+                    "Nexory развивается силами небольшой команды. Поддержи проект любой суммой — " +
+                        "это ускоряет выход в Google Play, версию для iPhone и новые функции.",
                     color = NexoryColors.TextSecondary, fontSize = 13.sp, lineHeight = 19.sp,
                 )
                 Spacer(Modifier.height(14.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(NexoryColors.SurfaceMid)
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Button(
+                    onClick = { openUrl(context, DONATION_URL) },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(0.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(SBP_PHONE, color = NexoryColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(SBP_BANK, color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(
+                            Brush.horizontalGradient(listOf(NexoryColors.GradientStart, NexoryColors.GradientEnd))
+                        ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Favorite, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Перейти к оплате", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        }
                     }
-                    IconButton(onClick = { copyToClipboard(context, SBP_PHONE) }) {
-                        Icon(Icons.Default.ContentCopy, "Скопировать", tint = NexoryColors.PrimaryBlue)
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Оплата через СБП: выбираешь свой банк на защищённой странице, ничего привязывать не нужно. " +
+                        "Всё безопасно, реквизиты не раскрываются.",
+                    color = NexoryColors.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+                TextButton(onClick = { copyToClipboard(context, SBP_PHONE) }, contentPadding = PaddingValues(0.dp)) {
+                    Icon(Icons.Default.ContentCopy, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Скопировать номер для перевода вручную", color = NexoryColors.PrimaryBlue, fontSize = 12.sp)
+                }
+            }
+
+            // Что развиваем — без эмодзи, чистый список
+            SectionTitle("Что развиваем")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(NexoryColors.SurfaceDark)
+                    .padding(vertical = 4.dp),
+            ) {
+                ROADMAP.forEachIndexed { i, r ->
+                    if (i > 0) HorizontalDivider(color = NexoryColors.SurfaceMid, modifier = Modifier.padding(start = 16.dp))
+                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        Box(
+                            modifier = Modifier.padding(top = 5.dp).size(7.dp).clip(RoundedCornerShape(4.dp))
+                                .background(NexoryColors.PrimaryBlue),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(r.title, color = NexoryColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            Text(r.text, color = NexoryColors.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp)
+                        }
                     }
                 }
             }
@@ -241,4 +264,12 @@ private fun copyToClipboard(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText("СБП", text))
     Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+}
+
+private fun openUrl(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Не удалось открыть ссылку оплаты", Toast.LENGTH_SHORT).show()
+    }
 }

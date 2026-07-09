@@ -73,6 +73,7 @@ data class EventDto(
     @SerializedName("skill_level")       val skillLevel:      String? = null,
     @SerializedName("event_type")        val eventType:       String? = null,
     @SerializedName("price_description") val priceDescription: String? = null,
+    val metro:       String?  = null,
     val status:      String   = "active",
     // Создатель — denormalized для удобства UI
     @SerializedName("creator_id")       val creatorId:       String? = null,

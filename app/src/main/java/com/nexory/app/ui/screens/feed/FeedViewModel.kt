@@ -27,11 +27,18 @@ data class FeedUiState(
     val sort:        String         = "soon",
     val freeOnly:    Boolean        = false,
     val maxPrice:    Int?           = null,
+    val level:       String?        = null,   // категория профессионализма
+    val metro:       String         = "",     // ближайшее метро
+    val useMyInterests: Boolean     = false,  // фильтр по любимым категориям из профиля
+    val myInterests: List<String>   = emptyList(),
     val myUserId:    String?        = null,
     val error:       String?        = null,
 ) {
     val activeFilterCount: Int
-        get() = listOf(location.isNotBlank(), sort != "soon", freeOnly, maxPrice != null).count { it }
+        get() = listOf(
+            location.isNotBlank(), sort != "soon", freeOnly, maxPrice != null,
+            level != null, metro.isNotBlank(), useMyInterests,
+        ).count { it }
 }
 
 @HiltViewModel
@@ -51,6 +58,12 @@ class FeedViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             _uiState.update { it.copy(myUserId = tokenManager.getUserId()) }
+            // Подтягиваем любимые категории (виды спорта) из профиля для фильтра "по интересам"
+            try {
+                val sports = api.getMyProfile().user?.sports
+                val interests = sports?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+                _uiState.update { it.copy(myInterests = interests) }
+            } catch (_: Exception) {}
         }
         refresh()   // первичная загрузка сразу, не дожидаясь RESUMED
     }
@@ -78,8 +91,12 @@ class FeedViewModel @Inject constructor(
                     sort     = state.sort,
                     freeOnly = if (state.freeOnly) "true" else null,
                     maxPrice = state.maxPrice?.toString(),
+                    level    = state.level,
+                    metro    = state.metro.takeIf { it.isNotBlank() },
                 )
-                _uiState.update { it.copy(isLoading = false, upcoming = feed.upcoming, past = feed.past) }
+                val upcoming = applyInterestFilter(feed.upcoming)
+                val past     = applyInterestFilter(feed.past)
+                _uiState.update { it.copy(isLoading = false, upcoming = upcoming, past = past) }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) return@launch
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -133,10 +150,30 @@ class FeedViewModel @Inject constructor(
     fun setSort(sort: String) { _uiState.update { it.copy(sort = sort) }; loadAll() }
     fun setFreeOnly(free: Boolean) { _uiState.update { it.copy(freeOnly = free) }; loadAll() }
     fun setMaxPrice(maxPrice: Int?) { _uiState.update { it.copy(maxPrice = maxPrice) }; debouncedAll() }
+    fun setLevel(level: String?) { _uiState.update { it.copy(level = level) }; loadAll() }
+    fun setMetro(metro: String) { _uiState.update { it.copy(metro = metro) }; debouncedAll() }
+    fun setUseMyInterests(on: Boolean) { _uiState.update { it.copy(useMyInterests = on) }; loadAll() }
 
     fun resetFilters() {
-        _uiState.update { it.copy(location = "", sort = "soon", freeOnly = false, maxPrice = null, category = null) }
+        _uiState.update { it.copy(
+            location = "", sort = "soon", freeOnly = false, maxPrice = null, category = null,
+            level = null, metro = "", useMyInterests = false,
+        ) }
         loadAll()
+    }
+
+    // Клиентский фильтр "по любимым категориям": оставляем события, чья категория/название
+    // совпадает с одним из интересов профиля. Сервер про интересы не знает.
+    private fun applyInterestFilter(events: List<EventDto>): List<EventDto> {
+        val st = _uiState.value
+        if (!st.useMyInterests || st.myInterests.isEmpty()) return events
+        return events.filter { e ->
+            st.myInterests.any { interest ->
+                val i = interest.lowercase()
+                (e.category?.lowercase()?.contains(i) == true) ||
+                e.title.lowercase().contains(i)
+            }
+        }
     }
 
     private fun debouncedAll() {

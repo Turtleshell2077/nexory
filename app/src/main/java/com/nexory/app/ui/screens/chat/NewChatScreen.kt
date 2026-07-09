@@ -67,7 +67,7 @@ fun NewChatScreen(
                 value = state.searchQuery,
                 onValueChange = viewModel::search,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                placeholder = { Text("Поиск по нику или телефону", color = NexoryColors.TextSecondary) },
+                placeholder = { Text("@ник, имя или телефон", color = NexoryColors.TextSecondary) },
                 leadingIcon = { Icon(Icons.Default.Search, null, tint = NexoryColors.TextSecondary) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
@@ -104,11 +104,14 @@ fun NewChatScreen(
                                 modifier = Modifier.size(44.dp).clip(CircleShape).background(NexoryColors.SurfaceMid),
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(
-                                (user.displayName?.takeIf { it.isNotBlank() } ?: user.username) + if (isSelf) " (вы)" else "",
-                                color = if (isSelf) NexoryColors.TextSecondary else NexoryColors.TextPrimary,
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    (user.displayName?.takeIf { it.isNotBlank() } ?: user.username) + if (isSelf) " (вы)" else "",
+                                    color = if (isSelf) NexoryColors.TextSecondary else NexoryColors.TextPrimary,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text("@${user.username}", color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                            }
                             if (isSelf) {
                                 Text("Это вы", color = NexoryColors.TextSecondary, fontSize = 12.sp)
                             } else {

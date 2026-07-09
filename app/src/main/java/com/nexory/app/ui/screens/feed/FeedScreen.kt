@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,7 +39,9 @@ import coil.compose.AsyncImage
 import com.nexory.app.data.network.EventDto
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.components.NexoryBottomBar
+import com.nexory.app.ui.components.MetroAutocompleteField
 import com.nexory.app.ui.screens.events.EVENT_CATEGORIES
+import com.nexory.app.ui.screens.events.SKILL_LEVELS
 import com.nexory.app.ui.screens.events.formatEventDateTime
 import com.nexory.app.ui.screens.events.formatPrice
 import com.nexory.app.ui.theme.NexoryColors
@@ -90,7 +93,7 @@ fun FeedScreen(
                 onDismissRequest = { showFilters = false },
                 containerColor   = NexoryColors.SurfaceDark,
             ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
                     Text("Фильтры", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = NexoryColors.TextPrimary)
 
                     Spacer(Modifier.height(16.dp))
@@ -150,6 +153,42 @@ fun FeedScreen(
                             CategoryChip(cat, uiState.category == cat) { viewModel.setCategory(if (uiState.category == cat) null else cat) }
                         }
                     }
+
+                    // Фильтр по любимым категориям из профиля
+                    if (uiState.myInterests.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("По моим интересам", fontSize = 14.sp, color = NexoryColors.TextPrimary)
+                                Text(uiState.myInterests.joinToString(", "), fontSize = 12.sp, color = NexoryColors.TextSecondary)
+                            }
+                            Switch(
+                                checked = uiState.useMyInterests,
+                                onCheckedChange = { viewModel.setUseMyInterests(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = NexoryColors.PrimaryBlue,
+                                    uncheckedTrackColor = NexoryColors.SurfaceMid,
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Text("Категория профессионализма", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
+                    Spacer(Modifier.height(8.dp))
+                    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SKILL_LEVELS.forEach { lvl ->
+                            // "Любой уровень" = без фильтра (null)
+                            val value = if (lvl == "Любой уровень") null else lvl
+                            CategoryChip(lvl, uiState.level == value) { viewModel.setLevel(value) }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Text("Метро рядом", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
+                    Spacer(Modifier.height(8.dp))
+                    MetroAutocompleteField(value = uiState.metro, onChange = viewModel::setMetro)
 
                     Spacer(Modifier.height(16.dp))
                     Text("Место проведения", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
@@ -505,6 +544,14 @@ fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit)
                     Icon(Icons.Default.LocationOn, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(event.address, fontSize = 13.sp, color = NexoryColors.TextSecondary, maxLines = 1)
+                }
+                event.metro?.takeIf { it.isNotBlank() }?.let { m ->
+                    Spacer(Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Place, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("м. $m", fontSize = 12.sp, color = NexoryColors.PrimaryBlue, maxLines = 1)
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 Row(

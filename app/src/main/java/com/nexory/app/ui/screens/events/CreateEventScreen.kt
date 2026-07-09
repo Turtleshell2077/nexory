@@ -70,6 +70,7 @@ fun CreateEventScreen(
     var price           by remember(loaded) { mutableStateOf(loaded?.price?.takeIf { it > 0.0 }?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: "") }
     var priceDesc       by remember(loaded) { mutableStateOf(loaded?.priceDescription ?: "") }
     var skillLevel      by remember(loaded) { mutableStateOf(loaded?.skillLevel ?: "") }
+    var metro           by remember(loaded) { mutableStateOf(loaded?.metro ?: "") }
     var eventType       by remember(loaded) { mutableStateOf(loaded?.eventType ?: "") }
     var coverUri        by remember { mutableStateOf<Uri?>(null) }   // превью
     var coverUrl        by remember(loaded) { mutableStateOf(loaded?.coverUrl) } // загруженный URL
@@ -211,6 +212,10 @@ fun CreateEventScreen(
             // ---- Местоположение ----
             FieldLabel("Местоположение")
             PlainField(value = location, onValueChange = { location = it }, placeholder = "Город, адрес или место встречи")
+
+            // ---- Метро рядом ----
+            FieldLabel("Метро рядом")
+            com.nexory.app.ui.components.MetroAutocompleteField(value = metro, onChange = { metro = it })
 
             // ---- Дата и время ----
             FieldLabel("Дата и время")
@@ -402,6 +407,7 @@ fun CreateEventScreen(
                         skillLevel      = skillLevel.takeIf { it.isNotBlank() },
                         eventType       = eventType.takeIf { it.isNotBlank() },
                         priceDescription = priceDesc.takeIf { it.isNotBlank() },
+                        metro           = metro.takeIf { it.isNotBlank() },
                     )
                 },
                 modifier = Modifier.fillMaxWidth().height(54.dp),

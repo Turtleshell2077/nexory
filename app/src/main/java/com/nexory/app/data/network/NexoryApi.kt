@@ -50,6 +50,8 @@ interface NexoryApi {
         @Query("sort")     sort:     String? = null,   // "soon" | "new"
         @Query("freeOnly") freeOnly: String? = null,   // "true"
         @Query("maxPrice") maxPrice: String? = null,
+        @Query("level")    level:    String? = null,   // категория профессионализма
+        @Query("metro")    metro:    String? = null,   // ближайшее метро
     ): FeedResponse
 
     // Мероприятия, на которые записан пользователь

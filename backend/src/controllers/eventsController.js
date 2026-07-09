@@ -36,6 +36,10 @@ function buildFilters(req, startIdx = 1) {
         conditions.push(`e.skill_level = $${idx++}`);
         params.push(req.query.level);
     }
+    if (req.query.metro) {
+        conditions.push(`e.metro ILIKE $${idx++}`);
+        params.push(`%${req.query.metro}%`);
+    }
     return { conditions, params, idx };
 }
 
@@ -43,7 +47,7 @@ const SELECT_COLS = `
     e.id, e.title, e.description, e.address,
     e.cover_url, e.category, e.starts_at, e.ends_at,
     e.max_participants, e.is_private, e.price, e.skill_level,
-    e.event_type, e.price_description, e.created_at,
+    e.event_type, e.price_description, e.metro, e.created_at,
     u.id   AS creator_id,
     u.username AS creator_username,
     u.avatar_url AS creator_avatar,
@@ -195,7 +199,7 @@ const createEvent = async (req, res) => {
     const {
         title, description, address, latitude, longitude,
         cover_url, category, max_participants, starts_at, ends_at, is_private,
-        price, skill_level, event_type, price_description
+        price, skill_level, event_type, price_description, metro
     } = req.body;
 
     if (containsProfanity(title) || containsProfanity(description)) {
@@ -208,14 +212,14 @@ const createEvent = async (req, res) => {
                 INSERT INTO events
                     (creator_id, title, description, address, latitude, longitude,
                      cover_url, category, max_participants, starts_at, ends_at, is_private,
-                     price, skill_level, event_type, price_description)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                     price, skill_level, event_type, price_description, metro)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
                 RETURNING *
             `, [creatorId, title, description, address, latitude, longitude,
                 cover_url, category, max_participants || null, starts_at, ends_at || null,
                 is_private === true || is_private === 'true',
                 price ? parseFloat(price) : 0, skill_level || null,
-                event_type || null, price_description || null]);
+                event_type || null, price_description || null, metro || null]);
 
             const event = eventRes.rows[0];
 
@@ -361,7 +365,7 @@ const updateEvent = async (req, res) => {
     const {
         title, description, address, cover_url, category,
         max_participants, starts_at, ends_at, is_private, price, skill_level,
-        event_type, price_description
+        event_type, price_description, metro
     } = req.body;
 
     try {
@@ -380,8 +384,9 @@ const updateEvent = async (req, res) => {
                 skill_level      = $11,
                 event_type       = $12,
                 price_description = $13,
+                metro            = $14,
                 updated_at       = NOW()
-            WHERE id = $14 AND creator_id = $15
+            WHERE id = $15 AND creator_id = $16
             RETURNING *
         `, [
             title || null, description || null, address || null, cover_url || null,
@@ -394,6 +399,7 @@ const updateEvent = async (req, res) => {
             skill_level || null,
             event_type || null,
             price_description || null,
+            metro || null,
             eventId, userId,
         ]);
 

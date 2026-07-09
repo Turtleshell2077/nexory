@@ -104,8 +104,8 @@ fun FriendsList(friends: List<FriendDto>, onChat: (FriendDto) -> Unit, onProfile
                     AsyncImage(model = friend.avatarUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(46.dp).clip(CircleShape).background(NexoryColors.SurfaceMid).clickable { onProfile(friend) })
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f).clickable { onProfile(friend) }) {
-                        Text(friend.username, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
-                        friend.bio?.let { Text(it, fontSize = 12.sp, color = NexoryColors.TextSecondary, maxLines = 1) }
+                        Text(friend.displayName?.takeIf { it.isNotBlank() } ?: friend.username, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
+                        Text("@${friend.username}", fontSize = 12.sp, color = NexoryColors.TextSecondary)
                     }
                     IconButton(onClick = { onChat(friend) }) { Icon(Icons.Default.Chat, null, tint = NexoryColors.PrimaryBlue) }
                     IconButton(onClick = { onRemove(friend.id) }) { Icon(Icons.Default.PersonRemove, null, tint = NexoryColors.Error) }
@@ -138,9 +138,14 @@ fun FriendRequestsList(requests: List<FriendDto>, onAccept: (String) -> Unit) {
 fun UserSearchTab(query: String, results: List<FriendDto>, friends: Set<String>, sentRequests: Set<String>, myUserId: String?, onSearch: (String) -> Unit, onAdd: (String) -> Unit, onProfile: (String) -> Unit) {
     Column(modifier = Modifier.padding(16.dp)) {
         OutlinedTextField(value = query, onValueChange = onSearch, modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Введи имя пользователя...", color = NexoryColors.TextSecondary) },
+            placeholder = { Text("@ник или имя", color = NexoryColors.TextSecondary) },
             leadingIcon = { Icon(Icons.Default.Search, null, tint = NexoryColors.TextSecondary) },
             singleLine = true, shape = RoundedCornerShape(12.dp), colors = nexoryTextFieldColors())
+        Text(
+            "Ищите по @нику (например, @ivan) или по имени",
+            color = NexoryColors.TextSecondary, fontSize = 12.sp,
+            modifier = Modifier.padding(top = 6.dp, start = 4.dp),
+        )
         Spacer(Modifier.height(12.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(results, key = { it.id }) { user ->
@@ -152,7 +157,7 @@ fun UserSearchTab(query: String, results: List<FriendDto>, friends: Set<String>,
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(user.displayName?.takeIf { it.isNotBlank() } ?: user.username, color = NexoryColors.TextPrimary, fontWeight = FontWeight.Medium)
-                            user.city?.takeIf { it.isNotBlank() }?.let { Text(it, color = NexoryColors.TextSecondary, fontSize = 12.sp) }
+                            Text("@${user.username}", color = NexoryColors.TextSecondary, fontSize = 12.sp)
                         }
                         when {
                             user.id == myUserId -> Text("Это вы", color = NexoryColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(8.dp))

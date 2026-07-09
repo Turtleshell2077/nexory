@@ -235,6 +235,7 @@ fun EventDetailScreen(
                             ) {
                                 DetailLine("Когда", formatEventDateTime(event.startsAt, event.endsAt))
                                 DetailLine("Место", event.address)
+                                event.metro?.takeIf { it.isNotBlank() }?.let { DetailLine("Метро", "м. $it") }
                                 event.eventType?.takeIf { it.isNotBlank() }?.let { DetailLine("Тип", it) }
                                 event.skillLevel?.takeIf { it.isNotBlank() }?.let { DetailLine("Уровень", it) }
                                 DetailLine(

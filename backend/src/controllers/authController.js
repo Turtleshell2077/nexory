@@ -8,30 +8,21 @@ const {
     verifyRefreshToken,
 } = require('../utils/jwt');
 
+const { sendMail } = require('../utils/mailer');
+
 // Коды сброса пароля и подтверждения email: key -> { code, expires }. In-memory.
 const resetCodes  = new Map();
 const verifyCodes = new Map();   // userId -> { code, expires }
-const resetTransporter = process.env.SMTP_HOST ? nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT) || 465,
-    secure: true,
-    auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-}) : null;
 
 // Отправить код подтверждения email
 function sendVerifyCode(userId, email) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     verifyCodes.set(userId, { code, expires: Date.now() + 30 * 60 * 1000 });
-    if (resetTransporter) {
-        resetTransporter.sendMail({
-            from:    `"Nexory" <${process.env.SMTP_USER}>`,
-            to:      email,
-            subject: 'Подтверждение почты в Nexory',
-            text:    `Ваш код подтверждения: ${code}\nКод действует 30 минут.`,
-        }).catch(err => console.error('[verify email]', err.message));
-    } else {
-        console.log(`[verify] Код подтверждения для ${email}: ${code}`);
-    }
+    sendMail({
+        to: email,
+        subject: 'Подтверждение почты в Nexory',
+        text: `Ваш код подтверждения: ${code}\nКод действует 30 минут.`,
+    }).then(sent => { if (!sent) console.log(`[verify] Код для ${email}: ${code}`); });
 }
  
 // POST /auth/register
@@ -191,17 +182,12 @@ const requestPasswordReset = async (req, res) => {
             const code = Math.floor(100000 + Math.random() * 900000).toString();
             resetCodes.set(email, { code, expires: Date.now() + 15 * 60 * 1000 });
 
-            if (resetTransporter) {
-                resetTransporter.sendMail({
-                    from:    `"Nexory" <${process.env.SMTP_USER}>`,
-                    to:      email,
-                    subject: 'Код для сброса пароля Nexory',
-                    text:    `Ваш код для смены пароля: ${code}\nКод действует 15 минут.`,
-                }).catch(err => console.error('[reset email]', err.message));
-            } else {
-                // SMTP не настроен — выводим код в консоль (для разработки)
-                console.log(`[password-reset] Код для ${email}: ${code}`);
-            }
+            const sent = await sendMail({
+                to: email,
+                subject: 'Код для сброса пароля Nexory',
+                text: `Ваш код для смены пароля: ${code}\nКод действует 15 минут.`,
+            });
+            if (!sent) console.log(`[password-reset] Код для ${email}: ${code}`);
         }
         res.json({ message: 'Если email существует, код отправлен' });
     } catch (err) {

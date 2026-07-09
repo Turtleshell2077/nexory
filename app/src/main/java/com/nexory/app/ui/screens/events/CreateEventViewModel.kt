@@ -57,6 +57,7 @@ class CreateEventViewModel @Inject constructor(
         skillLevel: String?,
         eventType: String?,
         priceDescription: String?,
+        metro: String? = null,
     ) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
@@ -75,6 +76,7 @@ class CreateEventViewModel @Inject constructor(
                     if (!skillLevel.isNullOrBlank())  put("skill_level",      skillLevel)
                     if (!eventType.isNullOrBlank())   put("event_type",       eventType)
                     if (!priceDescription.isNullOrBlank()) put("price_description", priceDescription)
+                    if (!metro.isNullOrBlank())       put("metro",            metro)
                 }
                 if (eventId == null) api.createEvent(body) else api.updateEvent(eventId, body)
                 _state.update { it.copy(isLoading = false, isCreated = true) }

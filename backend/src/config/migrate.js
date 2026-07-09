@@ -15,6 +15,7 @@ async function migrate() {
         '008_participant_role.sql',
         '009_reports_indexes.sql',
         '010_notification_prefs.sql',
+        '011_event_metro.sql',
     ];
 
     for (const file of migrations) {

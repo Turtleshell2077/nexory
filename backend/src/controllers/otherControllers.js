@@ -247,7 +247,8 @@ const updateFcmToken = async (req, res) => {
 };
 
 const searchUsers = async (req, res) => {
-    const q = req.query.q;
+    // Разрешаем писать ник с "@" — убираем его перед поиском по username
+    const q = (req.query.q || '').replace(/^@+/, '').trim();
     if (!q || q.length < 2) return res.json({ users: [] });
 
     try {
@@ -304,17 +305,7 @@ module.exports.users = { getProfile, updateProfile, changePassword, updateFcmTok
 // Support controller
 // -------------------------------------------------------
 
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT) || 465,
-    secure: true,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
-});
+const { sendMail } = require('../utils/mailer');
 
 const createTicket = async (req, res) => {
     const userId  = req.user.id;
@@ -329,23 +320,19 @@ const createTicket = async (req, res) => {
         const userRes = await query('SELECT username, email FROM users WHERE id = $1', [userId]);
         const user    = userRes.rows[0];
 
-        // Отправляем email если SMTP настроен
-        if (process.env.SMTP_HOST && process.env.SUPPORT_EMAIL) {
-            await transporter.sendMail({
-                from:    `"Nexory Support" <${process.env.SMTP_USER}>`,
-                to:      process.env.SUPPORT_EMAIL,
-                subject: `[Nexory Support] ${subject}`,
-                html: `
-                    <h3>Новый тикет поддержки</h3>
-                    <p><b>От:</b> ${user.username} (${user.email})</p>
-                    <p><b>Тема:</b> ${subject}</p>
-                    <hr>
-                    <p>${body.replace(/\n/g, '<br>')}</p>
-                `,
-            }).catch(err => console.error('[support email]', err.message));
+        // Дублируем на почту поддержки (если настроена). Тикет уже сохранён в БД в любом случае.
+        if (process.env.SUPPORT_EMAIL) {
+            sendMail({
+                to: process.env.SUPPORT_EMAIL,
+                subject: `[Nexory] ${subject}`,
+                html: `<h3>Новое обращение</h3>
+                       <p><b>От:</b> ${user.username} (${user.email})</p>
+                       <p><b>Тема:</b> ${subject}</p><hr>
+                       <p>${String(body).replace(/\n/g, '<br>')}</p>`,
+            });
         }
 
-        res.status(201).json({ message: 'Ticket created. We will contact you soon.' });
+        res.status(201).json({ message: 'Обращение отправлено' });
     } catch (err) {
         console.error('[support]', err);
         res.status(500).json({ error: 'Internal server error' });
