@@ -103,7 +103,7 @@ const getProfile = async (req, res) => {
             `SELECT id, username, email, phone, avatar_url, bio, display_name,
                     age, country, city, sports, looking_for, activity,
                     notifications_enabled, contacts_public, profile_visibility, role, created_at,
-                    notify_messages, notify_friend_events, notify_interest_events
+                    notify_messages, notify_friend_events, notify_interest_events, is_verified
              FROM users WHERE id = $1`,
             [userId]
         );

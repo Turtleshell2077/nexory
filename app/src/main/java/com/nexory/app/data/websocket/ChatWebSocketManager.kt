@@ -30,7 +30,7 @@ class ChatWebSocketManager @Inject constructor(
     companion object {
         // WebSocket-адрес должен указывать на тот же backend, что и REST (AppModule.BASE_URL).
         // Для локального dev-сервера это ws:// на тот же хост и порт.
-        private const val WS_BASE_URL = "ws://192.168.1.104:3000/ws"
+        private const val WS_BASE_URL = "ws://186.246.12.170:3000/ws"
         private const val MAX_RETRIES = 5
     }
 

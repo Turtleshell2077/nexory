@@ -21,6 +21,7 @@ class AuthViewModel @Inject constructor(
     private val api:          NexoryApi,
     private val tokenManager: TokenManager,
     private val wsManager:    ChatWebSocketManager,
+    private val fcmRegistrar: com.nexory.app.data.network.FcmRegistrar,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -43,8 +44,9 @@ class AuthViewModel @Inject constructor(
                     refreshToken = response.refreshToken,
                     userId       = response.user.id,
                 )
-                // Подключаем WebSocket сразу после логина
+                // Подключаем WebSocket и регистрируем FCM-токen
                 wsManager.connect()
+                fcmRegistrar.register()
                 _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
             } catch (e: Exception) {
                 val message = when {

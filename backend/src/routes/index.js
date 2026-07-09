@@ -24,6 +24,8 @@ router.post('/auth/refresh',  authCtrl.refresh);  // нужен только ref
 router.post('/auth/logout',   authCtrl.logout);   // можно и без токена
 router.post('/auth/request-password-reset', v.auth.requestReset, validate, authCtrl.requestPasswordReset);
 router.post('/auth/reset-password',          v.auth.resetPassword, validate, authCtrl.resetPassword);
+router.post('/auth/verify-email',            authenticate, authCtrl.verifyEmail);
+router.post('/auth/resend-verification',     authenticate, authCtrl.resendVerification);
  
 // ================================================================
 // EVENTS — защищённые

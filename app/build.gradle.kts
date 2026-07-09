@@ -72,9 +72,6 @@ dependencies {
     // ---- Coil (загрузка изображений) ----
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // ---- uCrop (обрезка/выбор кадра фото) ----
-    implementation("com.github.yalantis:ucrop:2.2.8")
-
     // ---- Lifecycle / ViewModel ----
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

@@ -42,6 +42,7 @@ data class UserDto(
     @SerializedName("notify_interest_events") val notifyInterestEvents: Boolean = true,
     @SerializedName("contacts_public")       val contactsPublic:       Boolean = false,
     @SerializedName("profile_visibility")    val profileVisibility:    String  = "friends", // all|friends|selected
+    @SerializedName("is_verified")           val emailVerified:        Boolean = false,
     @SerializedName("friend_status")         val friendStatus:         String? = null, // self|friends|pending_out|pending_in|none
 )
 

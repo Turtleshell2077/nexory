@@ -76,6 +76,26 @@ fun EditProfileScreen(
     var uploadingAvatar by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
+    var showInterestsInfo by remember { mutableStateOf(false) }
+
+    if (showInterestsInfo) {
+        AlertDialog(
+            onDismissRequest = { showInterestsInfo = false },
+            containerColor   = NexoryColors.SurfaceDark,
+            shape            = RoundedCornerShape(16.dp),
+            title  = { Text("Чем увлекаешься", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text   = {
+                Text(
+                    "Укажи любимые виды спорта, игры и занятия — то, чем ты увлекаешься и чем хотел бы " +
+                        "заниматься с другими. По этим увлечениям тебе будут подбираться мероприятия и участники.",
+                    color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInterestsInfo = false }) { Text("Понятно", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold) }
+            },
+        )
+    }
     val scope = rememberCoroutineScope()
 
     // Кадрирование (круглое) → загрузка
@@ -194,7 +214,19 @@ fun EditProfileScreen(
             ProfileField(value = phone, onValueChange = { phone = it }, placeholder = "+7 …", keyboardType = KeyboardType.Phone)
 
             // ---- Увлечения ----
-            ProfileLabel("Чем увлекаешься")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ProfileLabel("Чем увлекаешься")
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .background(NexoryColors.SurfaceMid, CircleShape)
+                        .clickable { showInterestsInfo = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Default.QuestionMark, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(11.dp))
+                }
+            }
             ProfileField(
                 value = interestQuery,
                 onValueChange = { interestQuery = it },

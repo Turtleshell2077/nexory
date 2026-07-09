@@ -23,7 +23,7 @@ object AppModule {
     // Базовый URL — в реальном проекте берём из BuildConfig
     // BuildConfig.API_BASE_URL задаётся в build.gradle:
     //   buildConfigField "String", "API_BASE_URL", '"https://api.nexory.app/api/v1/"'
-    private const val BASE_URL = "http://192.168.1.104:3000/api/v1/"
+    private const val BASE_URL = "http://186.246.12.170:3000/api/v1/"
 
     // Gson с настройками:
     // lenient — не падает на некоторые нестандартные JSON

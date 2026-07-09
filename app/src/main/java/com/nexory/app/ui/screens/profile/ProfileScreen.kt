@@ -161,6 +161,28 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(4.dp))
 
+            // Баннер: подтвердите почту
+            if (uiState.user != null && uiState.user?.emailVerified == false) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(NexoryColors.Violet.copy(alpha = 0.15f))
+                        .clickable { navController.navigate(Screen.VerifyEmail.route) }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.MarkEmailUnread, null, tint = NexoryColors.Violet, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Подтвердите почту", color = NexoryColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("Нажмите, чтобы ввести код из письма", color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                    }
+                    Icon(Icons.Default.ChevronRight, null, tint = NexoryColors.TextSecondary)
+                }
+            }
+
             // Информация о пользователе — текстом, с заголовком раздела
             val user = uiState.user
             if (user != null) {
@@ -230,6 +252,12 @@ fun ProfileScreen(
                     label   = "Настройки",
                     color   = NexoryColors.Violet,
                     onClick = { navController.navigate(Screen.Settings.route) },
+                )
+                ProfileMenuItem(
+                    icon    = Icons.Default.Favorite,
+                    label   = "Развитие проекта",
+                    color   = NexoryColors.Error,
+                    onClick = { navController.navigate(Screen.Development.route) },
                 )
                 ProfileMenuItem(
                     icon    = Icons.Default.SupportAgent,

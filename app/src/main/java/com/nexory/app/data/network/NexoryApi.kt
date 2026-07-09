@@ -33,6 +33,13 @@ interface NexoryApi {
     @POST("auth/reset-password")
     suspend fun resetPassword(@Body body: Map<String, String>): Map<String, String>
 
+    // Подтверждение почты
+    @POST("auth/verify-email")
+    suspend fun verifyEmail(@Body body: Map<String, String>): Map<String, String>
+
+    @POST("auth/resend-verification")
+    suspend fun resendVerification(): Map<String, String>
+
     // ---- Events ----
 
     @GET("events")

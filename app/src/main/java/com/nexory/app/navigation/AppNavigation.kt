@@ -1,5 +1,8 @@
 package com.nexory.app.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +44,7 @@ sealed class Screen(val route: String) {
     object NewChat     : Screen("new_chat")
     object Archive     : Screen("archive")
     object SelectFriends : Screen("select_friends")
+    object Development : Screen("development")
     object EditProfile : Screen("edit_profile")
     object CreateEvent : Screen("create_event")
     object EditEvent   : Screen("edit_event/{eventId}") {
@@ -60,6 +64,7 @@ sealed class Screen(val route: String) {
         fun route(id: String) = "user/$id"
     }
     object Onboarding : Screen("onboarding")
+    object VerifyEmail : Screen("verify_email")
 }
 
 @Composable
@@ -89,6 +94,11 @@ fun AppNavHost(
             !onboardingDone   -> Screen.Onboarding.route
             else              -> Screen.Login.route
         },
+        // Плавные переходы вместо резкой смены (без чёрных вспышек)
+        enterTransition     = { fadeIn(animationSpec = tween(180)) },
+        exitTransition      = { fadeOut(animationSpec = tween(180)) },
+        popEnterTransition  = { fadeIn(animationSpec = tween(180)) },
+        popExitTransition   = { fadeOut(animationSpec = tween(180)) },
     ) {
 
         // ---- Onboarding ----
@@ -102,6 +112,9 @@ fun AppNavHost(
         }
         composable(Screen.Register.route) {
             RegisterScreen(navController = navController)
+        }
+        composable(Screen.VerifyEmail.route) {
+            com.nexory.app.ui.screens.auth.VerifyEmailScreen(navController = navController)
         }
 
         // ---- Главные вкладки ----
@@ -176,6 +189,9 @@ fun AppNavHost(
         }
         composable(Screen.SelectFriends.route) {
             SelectFriendsScreen(navController = navController)
+        }
+        composable(Screen.Development.route) {
+            com.nexory.app.ui.screens.development.DevelopmentScreen(navController = navController)
         }
         composable(Screen.EditProfile.route) {
             EditProfileScreen(navController = navController)

@@ -8,14 +8,31 @@ const {
     verifyRefreshToken,
 } = require('../utils/jwt');
 
-// Коды сброса пароля: email -> { code, expires }. In-memory (достаточно для MVP).
-const resetCodes = new Map();
+// Коды сброса пароля и подтверждения email: key -> { code, expires }. In-memory.
+const resetCodes  = new Map();
+const verifyCodes = new Map();   // userId -> { code, expires }
 const resetTransporter = process.env.SMTP_HOST ? nodemailer.createTransport({
     host:   process.env.SMTP_HOST,
     port:   parseInt(process.env.SMTP_PORT) || 465,
     secure: true,
     auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 }) : null;
+
+// Отправить код подтверждения email
+function sendVerifyCode(userId, email) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    verifyCodes.set(userId, { code, expires: Date.now() + 30 * 60 * 1000 });
+    if (resetTransporter) {
+        resetTransporter.sendMail({
+            from:    `"Nexory" <${process.env.SMTP_USER}>`,
+            to:      email,
+            subject: 'Подтверждение почты в Nexory',
+            text:    `Ваш код подтверждения: ${code}\nКод действует 30 минут.`,
+        }).catch(err => console.error('[verify email]', err.message));
+    } else {
+        console.log(`[verify] Код подтверждения для ${email}: ${code}`);
+    }
+}
  
 // POST /auth/register
 // Создаёт нового пользователя. Email и username должны быть уникальными.
@@ -61,6 +78,9 @@ const register = async (req, res) => {
         });
  
         res.status(201).json(result);
+
+        // Отправляем код подтверждения на email (не блокирует ответ)
+        sendVerifyCode(result.user.id, email);
     } catch (err) {
         console.error('[register]', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -214,4 +234,41 @@ const resetPassword = async (req, res) => {
     }
 };
 
-module.exports = { register, login, refresh, logout, requestPasswordReset, resetPassword };
+// POST /auth/verify-email (авторизован) — подтвердить почту кодом
+const verifyEmail = async (req, res) => {
+    const userId = req.user.id;
+    const { code } = req.body;
+    const entry = verifyCodes.get(userId);
+    if (!entry || entry.code !== String(code || '') || Date.now() > entry.expires) {
+        return res.status(400).json({ error: 'Неверный или просроченный код' });
+    }
+    try {
+        await query('UPDATE users SET is_verified = true WHERE id = $1', [userId]);
+        verifyCodes.delete(userId);
+        res.json({ message: 'Почта подтверждена' });
+    } catch (err) {
+        console.error('[verifyEmail]', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// POST /auth/resend-verification (авторизован) — отправить код заново
+const resendVerification = async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const r = await query('SELECT email, is_verified FROM users WHERE id = $1', [userId]);
+        if (r.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+        if (r.rows[0].is_verified) return res.json({ message: 'Уже подтверждено' });
+        sendVerifyCode(userId, r.rows[0].email);
+        res.json({ message: 'Код отправлен' });
+    } catch (err) {
+        console.error('[resendVerification]', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+module.exports = {
+    register, login, refresh, logout,
+    requestPasswordReset, resetPassword,
+    verifyEmail, resendVerification,
+};
