@@ -146,3 +146,6 @@ nexory/
 build/
 local.properties
 package-lock.json
+build/
+local.properties
+package-lock.json
