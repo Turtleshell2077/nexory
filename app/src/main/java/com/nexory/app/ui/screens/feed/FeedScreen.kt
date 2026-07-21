@@ -2,6 +2,8 @@ package com.nexory.app.ui.screens.feed
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -154,24 +156,55 @@ fun FeedScreen(
                         }
                     }
 
-                    // Фильтр по любимым категориям из профиля
-                    if (uiState.myInterests.isNotEmpty()) {
-                        Spacer(Modifier.height(16.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("По моим интересам", fontSize = 14.sp, color = NexoryColors.TextPrimary)
-                                Text(uiState.myInterests.joinToString(", "), fontSize = 12.sp, color = NexoryColors.TextSecondary)
+                    // Фильтр по увлечениям
+                    Spacer(Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Увлечения", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f))
+                        if (uiState.myInterests.isNotEmpty()) {
+                            TextButton(onClick = { viewModel.useMyProfileInterests() }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                                Icon(Icons.Default.Person, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Мои увлечения", color = NexoryColors.PrimaryBlue, fontSize = 12.sp)
                             }
-                            Switch(
-                                checked = uiState.useMyInterests,
-                                onCheckedChange = { viewModel.setUseMyInterests(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = NexoryColors.PrimaryBlue,
-                                    uncheckedTrackColor = NexoryColors.SurfaceMid,
-                                )
-                            )
                         }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    // Поле ввода нового увлечения
+                    var interestInput by remember { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = interestInput,
+                        onValueChange = { interestInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("Например: футбол, музыка…", color = NexoryColors.TextSecondary) },
+                        leadingIcon = { Icon(Icons.Default.Interests, null, tint = NexoryColors.TextSecondary) },
+                        trailingIcon = {
+                            if (interestInput.isNotBlank()) {
+                                IconButton(onClick = { viewModel.addInterest(interestInput); interestInput = "" }) {
+                                    Icon(Icons.Default.Add, "Добавить", tint = NexoryColors.PrimaryBlue)
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor      = NexoryColors.PrimaryBlue,
+                            unfocusedBorderColor    = NexoryColors.SurfaceMid,
+                            focusedContainerColor   = NexoryColors.SurfaceMid,
+                            unfocusedContainerColor = NexoryColors.SurfaceMid,
+                            cursorColor             = NexoryColors.PrimaryBlue,
+                            focusedTextColor        = NexoryColors.TextPrimary,
+                            unfocusedTextColor      = NexoryColors.TextPrimary,
+                        ),
+                    )
+                    // Подсказки из профиля — быстрый выбор тапом
+                    val suggestions = (uiState.myInterests + uiState.selectedInterests.toList()).distinct()
+                    if (suggestions.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        FlowRowChips(
+                            items = suggestions,
+                            selected = uiState.selectedInterests,
+                            onToggle = { viewModel.toggleInterest(it) },
+                        )
                     }
 
                     Spacer(Modifier.height(16.dp))
@@ -255,7 +288,7 @@ fun FeedScreen(
                     FeedPage(
                         upcoming = uiState.upcoming, past = uiState.past, isLoading = uiState.isLoading,
                         showCategoryBar = true, category = uiState.category, onSelectCategory = viewModel::setCategory,
-                        markOwner = false, myUserId = uiState.myUserId, emptyIsMy = false,
+                        markOwner = true, myUserId = uiState.myUserId, emptyIsMy = false,
                         onOpenEvent = { navController.navigate(Screen.EventDetail.route(it)) },
                     )
                 } else {
@@ -461,6 +494,31 @@ private fun CategoryChip(label: String, active: Boolean, onClick: () -> Unit) {
             fontSize = 13.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
         )
+    }
+}
+
+// Чипы увлечений в фильтре — выбранные подсвечены и имеют крестик
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRowChips(items: List<String>, selected: Set<String>, onToggle: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { item ->
+            val isSel = item in selected
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (isSel) NexoryColors.PrimaryBlue else NexoryColors.SurfaceMid)
+                    .clickable { onToggle(item) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(item, color = if (isSel) Color.White else NexoryColors.TextSecondary, fontSize = 13.sp)
+                if (isSel) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                }
+            }
+        }
     }
 }
 

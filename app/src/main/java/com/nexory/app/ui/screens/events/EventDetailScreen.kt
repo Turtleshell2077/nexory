@@ -261,6 +261,11 @@ fun EventDetailScreen(
                                     }
                                     Text(formatPrice(event.price), color = NexoryColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 }
+                                // Дата создания — ненавязчиво, отдельной строкой снизу
+                                formatCreatedAt(event.createdAt).takeIf { it.isNotBlank() }?.let {
+                                    HorizontalDivider(color = NexoryColors.SurfaceMid, thickness = 0.5.dp)
+                                    Text(it, color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                                }
                             }
 
                             Spacer(Modifier.height(16.dp))
@@ -274,10 +279,9 @@ fun EventDetailScreen(
                                     .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                AsyncImage(
-                                    model = event.creatorAvatar, contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(40.dp).clip(CircleShape).background(NexoryColors.SurfaceMid),
+                                com.nexory.app.ui.components.UserAvatar(
+                                    url = event.creatorAvatar, name = event.creatorUsername,
+                                    seed = event.creatorId, size = 40.dp,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
@@ -322,10 +326,9 @@ fun EventDetailScreen(
                                                 .clickable { navController.navigate(Screen.UserProfile.route(participant.id)) }
                                                 .padding(4.dp),
                                         ) {
-                                            AsyncImage(
-                                                model = participant.avatarUrl, contentDescription = null,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.size(48.dp).clip(CircleShape).background(NexoryColors.SurfaceMid),
+                                            com.nexory.app.ui.components.UserAvatar(
+                                                url = participant.avatarUrl, name = participant.username,
+                                                seed = participant.id, size = 48.dp,
                                             )
                                             Spacer(Modifier.height(4.dp))
                                             Text(participant.username, fontSize = 11.sp, color = NexoryColors.TextSecondary, maxLines = 1)

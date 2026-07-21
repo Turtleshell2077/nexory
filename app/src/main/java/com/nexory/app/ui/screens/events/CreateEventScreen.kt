@@ -204,14 +204,16 @@ fun CreateEventScreen(
 
             // ---- Основная информация ----
             FieldLabel("Название")
-            PlainField(value = title, onValueChange = { title = it }, placeholder = "Например: Игра в футбол")
+            PlainField(value = title, onValueChange = { title = it }, placeholder = "Например: Игра в футбол",
+                isError = "title" in uiState.invalidFields)
 
             FieldLabel("Описание")
             PlainField(value = description, onValueChange = { description = it }, placeholder = "Расскажи о мероприятии", maxLines = 5)
 
             // ---- Местоположение ----
             FieldLabel("Местоположение")
-            PlainField(value = location, onValueChange = { location = it }, placeholder = "Город, адрес или место встречи")
+            PlainField(value = location, onValueChange = { location = it }, placeholder = "Город, адрес или место встречи",
+                isError = "address" in uiState.invalidFields)
 
             // ---- Метро рядом ----
             FieldLabel("Метро рядом")
@@ -295,6 +297,7 @@ fun CreateEventScreen(
                 onValueChange = { price = it.filter { c -> c.isDigit() } },
                 placeholder = "0 — бесплатно",
                 keyboardType = KeyboardType.Number,
+                isError = "price" in uiState.invalidFields,
             )
             // Описание стоимости — только если цена задана
             if (price.isNotBlank() && price != "0") {
@@ -349,6 +352,7 @@ fun CreateEventScreen(
                 onValueChange = { maxParticipants = it.filter { c -> c.isDigit() } },
                 placeholder = "Количество участников",
                 keyboardType = KeyboardType.Number,
+                isError = "maxParticipants" in uiState.invalidFields,
             )
 
             // ---- Приватность ----
@@ -446,6 +450,7 @@ fun PlainField(
     placeholder: String = "",
     maxLines: Int = 1,
     keyboardType: KeyboardType = KeyboardType.Text,
+    isError: Boolean = false,
 ) {
     OutlinedTextField(
         value           = value,
@@ -454,6 +459,7 @@ fun PlainField(
         placeholder     = { Text(placeholder, color = NexoryColors.TextSecondary) },
         maxLines        = maxLines,
         singleLine      = maxLines == 1,
+        isError         = isError,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape           = RoundedCornerShape(12.dp),
         colors          = nexoryTextFieldColors(),

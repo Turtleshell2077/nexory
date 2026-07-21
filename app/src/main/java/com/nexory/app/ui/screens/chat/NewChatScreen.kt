@@ -99,9 +99,8 @@ fun NewChatScreen(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            AsyncImage(
-                                model = user.avatarUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(44.dp).clip(CircleShape).background(NexoryColors.SurfaceMid),
+                            com.nexory.app.ui.components.UserAvatar(
+                                url = user.avatarUrl, name = user.displayName ?: user.username, seed = user.id, size = 44.dp,
                             )
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {

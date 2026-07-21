@@ -31,6 +31,18 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    var showSetPin by remember { mutableStateOf(false) }
+
+    // Экран установки PIN поверх настроек
+    if (showSetPin) {
+        com.nexory.app.ui.screens.security.PinLockScreen(
+            mode = com.nexory.app.ui.screens.security.PinMode.SET,
+            onPinSet = { viewModel.setPin(it) },
+            onSuccess = { showSetPin = false },
+            onCancel = { showSetPin = false },
+        )
+        return
+    }
 
     Scaffold(
         containerColor = NexoryColors.DeepBlack,
@@ -145,6 +157,36 @@ fun SettingsScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Выбрать друзей")
                 }
+            }
+
+            // ---- Безопасность ----
+            SettingsSectionLabel("Безопасность")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(NexoryColors.SurfaceDark)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.Lock, null, tint = NexoryColors.PrimaryBlue)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Вход по PIN-коду", color = NexoryColors.TextPrimary, fontSize = 15.sp)
+                    Text(
+                        if (state.pinEnabled) "Приложение запрашивает PIN при запуске" else "Защитить вход четырёхзначным кодом",
+                        color = NexoryColors.TextSecondary, fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = state.pinEnabled,
+                    onCheckedChange = { on -> if (on) showSetPin = true else viewModel.disablePin() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = NexoryColors.PrimaryBlue,
+                        uncheckedTrackColor = NexoryColors.SurfaceMid,
+                    ),
+                )
             }
 
             // ---- О приложении ----

@@ -71,7 +71,9 @@ fun OnboardingScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(NexoryColors.DeepBlack).padding(24.dp),
+        // systemBarsPadding — контент не заезжает под статус-бар сверху и
+        // навигационную полоску снизу (у разных устройств она разной высоты)
+        modifier = Modifier.fillMaxSize().background(NexoryColors.DeepBlack).systemBarsPadding().padding(24.dp),
     ) {
         // Пропустить
         Box(Modifier.fillMaxWidth()) {

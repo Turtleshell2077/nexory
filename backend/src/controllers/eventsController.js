@@ -130,7 +130,7 @@ const getMyEvents = async (req, res) => {
             FROM events e
             JOIN event_participants ep ON ep.event_id = e.id
             JOIN users u ON u.id = e.creator_id
-            WHERE ep.user_id = $1 AND ep.status = 'registered'
+            WHERE ep.user_id = $1 AND ep.status = 'registered' AND e.status = 'active'
             ORDER BY e.starts_at ASC
         `, [userId]);
 
@@ -414,12 +414,18 @@ const updateEvent = async (req, res) => {
 };
 
 // DELETE /events/:id — удалить мероприятие (только создатель)
+// Это МЯГКОЕ удаление (status='cancelled'), а не DELETE: у chats.event_id стоит
+// ON DELETE CASCADE, поэтому физическое удаление снесло бы чат мероприятия вместе
+// с историей. Мягкое удаление убирает событие из ленты (там фильтр status='active'),
+// но сохраняет чат и переписку участников.
 const deleteEvent = async (req, res) => {
     const userId  = req.user.id;
     const eventId = req.params.id;
 
     const result = await query(
-        'DELETE FROM events WHERE id = $1 AND creator_id = $2 RETURNING id',
+        `UPDATE events SET status = 'cancelled', updated_at = NOW()
+         WHERE id = $1 AND creator_id = $2 AND status != 'cancelled'
+         RETURNING id`,
         [eventId, userId]
     );
 

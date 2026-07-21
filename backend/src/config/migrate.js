@@ -31,15 +31,21 @@ async function migrate() {
             console.log(`[migrate] ${file} done ✓`);
         } catch (err) {
             // Пропускаем ошибки "уже существует" при повторном запуске
-            if (err.code === '42P07' || err.code === '42710') {
+            if (err.code === '42P07' || err.code === '42710' || err.code === '42701') {
                 console.log(`[migrate] ${file} skipped (already exists)`);
             } else {
                 console.error(`[migrate] ${file} error:`, err.message);
             }
         }
     }
-
-    await pool.end();
 }
 
-migrate();
+// Запуск напрямую (`npm run migrate`) — прогоняем и закрываем пул.
+// Импорт из index.js — прогоняем на старте сервера, пул не трогаем.
+if (require.main === module) {
+    migrate()
+        .then(() => pool.end())
+        .catch((e) => { console.error('[migrate] fatal:', e); process.exit(1); });
+}
+
+module.exports = { migrate };

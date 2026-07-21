@@ -11,6 +11,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import retrofit2.Retrofit
 import javax.inject.Inject
 import javax.inject.Named
@@ -58,18 +60,33 @@ class TokenManager @Inject constructor(
         }
     }
 
-    // Вызывается из AuthInterceptor при 401.
-    // Возвращает новый access token или null при ошибке.
-    suspend fun refreshAndSave(refreshToken: String): String? {
-        return try {
-            // Прямой вызов auth API без интерсептора
+    // Единая точка обновления токена. Мьютекс сериализует одновременные попытки:
+    // при истечении access-токена десятки параллельных запросов получают 401 разом.
+    // Без сериализации каждый дёргает /auth/refresh, но refresh-токен на сервере
+    // одноразовый (rotation) — первый успевает, остальные получают «невалидный
+    // refresh» и разлогинивают пользователя. Здесь только ОДИН поток реально
+    // обновляет токен, остальные ждут и переиспользуют уже обновлённый.
+    private val refreshMutex = Mutex()
+
+    /**
+     * Вызывается из AuthInterceptor при 401.
+     * @param usedAccessToken токен, с которым запрос словил 401 (может быть null).
+     * @return актуальный access-token для повтора запроса, либо null если сессия мертва.
+     */
+    suspend fun refreshIfNeeded(usedAccessToken: String?): String? = refreshMutex.withLock {
+        // Пока мы ждали мьютекс, другой поток мог уже обновить токен.
+        // Если текущий токен отличается от того, что словил 401 — просто берём его.
+        val current = getAccessToken()
+        if (current != null && current != usedAccessToken) return@withLock current
+
+        val refreshToken = getRefreshToken() ?: return@withLock null
+        return@withLock try {
             val authApi = authRetrofit.create(
                 com.nexory.app.data.network.NexoryApi::class.java
             )
             val response: TokenResponse = authApi.refreshTokens(
                 mapOf("refreshToken" to refreshToken)
             )
-            // Сохраняем новые токены — userId не меняется
             val currentUserId = getUserId() ?: ""
             saveTokens(response.accessToken, response.refreshToken, currentUserId)
             response.accessToken

@@ -71,6 +71,8 @@ fun LoginScreen(
                 .fillMaxWidth()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
+                // навигационная полоска снизу не должна перекрывать ссылку «Регистрация»
+                .navigationBarsPadding()
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

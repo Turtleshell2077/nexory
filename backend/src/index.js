@@ -5,6 +5,7 @@ const https = require('https');
 const fs    = require('fs');
 const app   = require('./app');
 const { initWebSocketServer } = require('./websocket/chatServer');
+const { migrate } = require('./config/migrate');
 
 // Предупреждение о небезопасных дефолтах в проде
 if (process.env.NODE_ENV === 'production') {
@@ -36,9 +37,17 @@ process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]
 process.on('uncaughtException', (err) => console.error('[uncaughtException]', err));
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`✓ Nexory server running on port ${PORT}`);
-});
+
+// Прогоняем миграции на старте — схема БД всегда актуальна после деплоя.
+// Миграции идемпотентны (IF NOT EXISTS / пропуск «уже существует»).
+migrate()
+    .then(() => console.log('✓ Миграции применены'))
+    .catch((e) => console.error('⚠️  Ошибка миграций (сервер всё равно запустится):', e.message))
+    .finally(() => {
+        server.listen(PORT, () => {
+            console.log(`✓ Nexory server running on port ${PORT}`);
+        });
+    });
 
 // Graceful shutdown — корректно закрываем соединения при остановке
 function shutdown(signal) {

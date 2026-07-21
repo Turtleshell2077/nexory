@@ -24,32 +24,28 @@ class AuthInterceptor @Inject constructor(
 
         val response = chain.proceed(request)
 
-        // Если сервер ответил 401 — токен истёк, пробуем обновить
+        // Если сервер ответил 401 — токен истёк, пробуем обновить.
+        // refreshIfNeeded сериализует параллельные обновления через мьютекс
+        // и переиспользует уже обновлённый токен, если другой запрос успел раньше.
         if (response.code == 401) {
             response.close()
 
-            val refreshToken = runBlocking { tokenManager.getRefreshToken() }
-                ?: return response // Refresh тоже нет — пользователь не залогинен
-
-            // Запрашиваем новые токены. runBlocking здесь допустим,
-            // т.к. мы уже на IO-потоке OkHttp.
-            val newTokens = runBlocking {
+            val newAccessToken = runBlocking {
                 try {
-                    // Прямой HTTP запрос без интерсептора (authRetrofit)
-                    tokenManager.refreshAndSave(refreshToken)
+                    tokenManager.refreshIfNeeded(accessToken)
                 } catch (e: Exception) {
-                    null // Refresh тоже не удался → разлогиниваем
+                    null
                 }
             }
 
-            return if (newTokens != null) {
-                // Повторяем оригинальный запрос с новым токеном
+            return if (newAccessToken != null) {
+                // Повторяем оригинальный запрос с актуальным токеном
                 val retryRequest = chain.request().newBuilder()
-                    .header("Authorization", "Bearer $newTokens")
+                    .header("Authorization", "Bearer $newAccessToken")
                     .build()
                 chain.proceed(retryRequest)
             } else {
-                // Оба токена недействительны — чистим данные
+                // Сессия действительно мертва — чистим данные (уводит на экран входа)
                 runBlocking { tokenManager.clear() }
                 response
             }

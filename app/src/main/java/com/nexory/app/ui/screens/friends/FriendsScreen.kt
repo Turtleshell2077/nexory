@@ -1,8 +1,11 @@
 package com.nexory.app.ui.screens.friends
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -26,19 +29,26 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.nexory.app.data.network.FriendDto
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.components.NexoryBottomBar
 import com.nexory.app.ui.components.nexoryTextFieldColors
 import com.nexory.app.ui.theme.NexoryColors
 import androidx.compose.material3.ExperimentalMaterial3Api
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun FriendsScreen(
     navController: NavController,
     viewModel: FriendsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = state.tab) { 3 }
+
+    // Свайп между вкладками синхронизируем с состоянием таба
+    LaunchedEffect(pagerState.currentPage) { viewModel.setTab(pagerState.currentPage) }
+    LaunchedEffect(state.tab) { if (state.tab != pagerState.currentPage) pagerState.animateScrollToPage(state.tab) }
 
     // Обновляем друзей/запросы при возвращении на экран (входящие заявки появятся)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -59,36 +69,38 @@ fun FriendsScreen(
         bottomBar = { NexoryBottomBar(navController, Screen.Friends.route) }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            TabRow(selectedTabIndex = state.tab, containerColor = NexoryColors.SurfaceDark, contentColor = NexoryColors.PrimaryBlue) {
+            TabRow(selectedTabIndex = pagerState.currentPage, containerColor = NexoryColors.SurfaceDark, contentColor = NexoryColors.PrimaryBlue) {
                 listOf(
                     "Друзья",
                     "Запросы${if (state.requests.isNotEmpty()) " (${state.requests.size})" else ""}",
                     "Поиск"
                 ).forEachIndexed { index, title ->
-                    Tab(selected = state.tab == index, onClick = { viewModel.setTab(index) }) {
+                    Tab(selected = pagerState.currentPage == index, onClick = { scope.launch { pagerState.animateScrollToPage(index) } }) {
                         Text(title, modifier = Modifier.padding(vertical = 12.dp), fontSize = 14.sp,
-                            fontWeight = if (state.tab == index) FontWeight.SemiBold else FontWeight.Normal)
+                            fontWeight = if (pagerState.currentPage == index) FontWeight.SemiBold else FontWeight.Normal)
                     }
                 }
             }
-            when (state.tab) {
-                0 -> FriendsList(
-                    friends  = state.friends,
-                    onChat   = { friend -> viewModel.openDirectChat(friend.id) { chatId -> navController.navigate(Screen.ChatDetail.route(chatId)) } },
-                    onProfile = { navController.navigate(Screen.UserProfile.route(it.id)) },
-                    onRemove = viewModel::removeFriend,
-                )
-                1 -> FriendRequestsList(requests = state.requests, onAccept = viewModel::acceptRequest)
-                2 -> UserSearchTab(
-                    query        = state.searchQuery,
-                    results      = state.searchResults,
-                    friends      = state.friends.map { it.id }.toSet(),
-                    sentRequests = state.sentRequests,
-                    myUserId     = state.myUserId,
-                    onSearch     = viewModel::search,
-                    onAdd        = viewModel::sendRequest,
-                    onProfile    = { navController.navigate(Screen.UserProfile.route(it)) },
-                )
+            HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
+                when (page) {
+                    0 -> FriendsList(
+                        friends  = state.friends,
+                        onChat   = { friend -> viewModel.openDirectChat(friend.id) { chatId -> navController.navigate(Screen.ChatDetail.route(chatId)) } },
+                        onProfile = { navController.navigate(Screen.UserProfile.route(it.id)) },
+                        onRemove = viewModel::removeFriend,
+                    )
+                    1 -> FriendRequestsList(requests = state.requests, onAccept = viewModel::acceptRequest)
+                    2 -> UserSearchTab(
+                        query        = state.searchQuery,
+                        results      = state.searchResults,
+                        friends      = state.friends.map { it.id }.toSet(),
+                        sentRequests = state.sentRequests,
+                        myUserId     = state.myUserId,
+                        onSearch     = viewModel::search,
+                        onAdd        = viewModel::sendRequest,
+                        onProfile    = { navController.navigate(Screen.UserProfile.route(it)) },
+                    )
+                }
             }
         }
     }
@@ -101,7 +113,7 @@ fun FriendsList(friends: List<FriendDto>, onChat: (FriendDto) -> Unit, onProfile
         items(friends, key = { it.id }) { friend ->
             Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = NexoryColors.SurfaceDark), modifier = Modifier.fillMaxWidth()) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(model = friend.avatarUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(46.dp).clip(CircleShape).background(NexoryColors.SurfaceMid).clickable { onProfile(friend) })
+                    com.nexory.app.ui.components.UserAvatar(url = friend.avatarUrl, name = friend.displayName ?: friend.username, seed = friend.id, size = 46.dp, modifier = Modifier.clickable { onProfile(friend) })
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f).clickable { onProfile(friend) }) {
                         Text(friend.displayName?.takeIf { it.isNotBlank() } ?: friend.username, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
@@ -122,7 +134,7 @@ fun FriendRequestsList(requests: List<FriendDto>, onAccept: (String) -> Unit) {
         items(requests, key = { it.id }) { req ->
             Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = NexoryColors.SurfaceDark), modifier = Modifier.fillMaxWidth()) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(model = req.avatarUrl, contentDescription = null, modifier = Modifier.size(46.dp).clip(CircleShape).background(NexoryColors.SurfaceMid))
+                    com.nexory.app.ui.components.UserAvatar(url = req.avatarUrl, name = req.displayName ?: req.username, seed = req.id, size = 46.dp)
                     Spacer(Modifier.width(12.dp))
                     Text(req.username, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f))
                     Button(onClick = { onAccept(req.id) }, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = NexoryColors.DeepBlue)) {
@@ -152,8 +164,7 @@ fun UserSearchTab(query: String, results: List<FriendDto>, friends: Set<String>,
                 Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = NexoryColors.SurfaceDark),
                     modifier = Modifier.fillMaxWidth().clickable { onProfile(user.id) }) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AsyncImage(model = user.avatarUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(NexoryColors.SurfaceMid))
+                        com.nexory.app.ui.components.UserAvatar(url = user.avatarUrl, name = user.displayName ?: user.username, seed = user.id, size = 40.dp)
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(user.displayName?.takeIf { it.isNotBlank() } ?: user.username, color = NexoryColors.TextPrimary, fontWeight = FontWeight.Medium)

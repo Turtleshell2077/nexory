@@ -37,7 +37,7 @@ const register = async (req, res) => {
             [email, username]
         );
         if (existing.rows.length > 0) {
-            return res.status(409).json({ error: 'Email or username already taken' });
+            return res.status(409).json({ error: 'Почта или никнейм уже заняты' });
         }
  
         // bcrypt с cost factor 12 — хороший баланс безопасности и скорости.
@@ -61,7 +61,7 @@ const register = async (req, res) => {
             // Сохраняем refresh token в БД. expires_at = сейчас + 30 дней
             await client.query(
                 `INSERT INTO refresh_tokens (user_id, token, expires_at)
-                 VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+                 VALUES ($1, $2, NOW() + INTERVAL '60 days')`,
                 [user.id, refreshToken]
             );
  
@@ -89,13 +89,13 @@ const login = async (req, res) => {
         );
         if (userRes.rows.length === 0) {
             // Намеренно общее сообщение — не раскрываем, что именно неверно
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'Неверная почта или пароль' });
         }
  
         const user = userRes.rows[0];
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'Неверная почта или пароль' });
         }
  
         const accessToken  = generateAccessToken(user.id, user.role);
@@ -103,7 +103,7 @@ const login = async (req, res) => {
  
         await query(
             `INSERT INTO refresh_tokens (user_id, token, expires_at)
-             VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+             VALUES ($1, $2, NOW() + INTERVAL '60 days')`,
             [user.id, refreshToken]
         );
  
@@ -150,7 +150,7 @@ const refresh = async (req, res) => {
             await client.query('DELETE FROM refresh_tokens WHERE id = $1', [tokenId]);
             await client.query(
                 `INSERT INTO refresh_tokens (user_id, token, expires_at)
-                 VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+                 VALUES ($1, $2, NOW() + INTERVAL '60 days')`,
                 [user.id, newRefreshToken]
             );
         });

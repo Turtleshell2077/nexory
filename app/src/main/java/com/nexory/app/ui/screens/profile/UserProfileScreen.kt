@@ -178,13 +178,17 @@ fun UserProfileScreen(
         ) {
             Spacer(Modifier.height(24.dp))
             var avDrag by remember { mutableStateOf(0f) }
-            AsyncImage(
-                model = state.user?.avatarUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.size(96.dp).clip(CircleShape).background(NexoryColors.SurfaceMid)
-                    .clickable { showAvatarFull = true }
-                    .pointerInput(state.user?.avatarUrl) {
+            val avatarUrl = state.user?.avatarUrl
+            com.nexory.app.ui.components.UserAvatar(
+                url = avatarUrl,
+                name = state.user?.displayName?.takeIf { it.isNotBlank() } ?: state.user?.username,
+                seed = userId,
+                size = 96.dp,
+                modifier = Modifier
+                    .clickable(enabled = avatarUrl != null) { showAvatarFull = true }
+                    .pointerInput(avatarUrl) {
                         detectVerticalDragGestures(
-                            onDragEnd = { if (avDrag > 50f && state.user?.avatarUrl != null) showAvatarRect = true; avDrag = 0f },
+                            onDragEnd = { if (avDrag > 50f && avatarUrl != null) showAvatarRect = true; avDrag = 0f },
                         ) { _, d -> avDrag += d }
                     },
             )

@@ -49,12 +49,7 @@ class AuthViewModel @Inject constructor(
                 fcmRegistrar.register()
                 _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
             } catch (e: Exception) {
-                val message = when {
-                    e.message?.contains("401") == true -> "Неверный email или пароль"
-                    e.message?.contains("network") == true -> "Нет подключения к интернету"
-                    else -> "Ошибка: ${e.message}"
-                }
-                _uiState.update { it.copy(isLoading = false, error = message) }
+                _uiState.update { it.copy(isLoading = false, error = com.nexory.app.data.network.ApiError.message(e)) }
             }
         }
     }
@@ -86,11 +81,7 @@ class AuthViewModel @Inject constructor(
                 wsManager.connect()
                 _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
             } catch (e: Exception) {
-                val message = when {
-                    e.message?.contains("409") == true -> "Email или имя пользователя уже заняты"
-                    else -> "Ошибка регистрации: ${e.message}"
-                }
-                _uiState.update { it.copy(isLoading = false, error = message) }
+                _uiState.update { it.copy(isLoading = false, error = com.nexory.app.data.network.ApiError.message(e)) }
             }
         }
     }

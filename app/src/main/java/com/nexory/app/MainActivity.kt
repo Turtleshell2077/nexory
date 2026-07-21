@@ -14,7 +14,10 @@ import androidx.navigation.compose.rememberNavController
 import com.nexory.app.data.local.SettingsManager
 import com.nexory.app.data.local.ThemeMode
 import com.nexory.app.data.local.TokenManager
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.nexory.app.navigation.AppNavHost
+import com.nexory.app.ui.screens.security.PinLockScreen
+import com.nexory.app.ui.screens.security.PinMode
 import com.nexory.app.ui.theme.NexoryTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.map
@@ -54,13 +57,26 @@ class MainActivity : ComponentActivity() {
                         settingsManager.onboardingDone.map { it as Boolean? }
                     }.collectAsState(initial = null)
 
+                    // PIN-код: если включён и пользователь залогинен — блокируем вход
+                    // до правильного PIN. rememberSaveable → поворот экрана не сбрасывает разблокировку.
+                    val pinEnabled by settingsManager.pinEnabled.collectAsState(initial = false)
+                    var unlocked by rememberSaveable { mutableStateOf(false) }
+
                     val navController = rememberNavController()
 
-                    AppNavHost(
-                        navController  = navController,
-                        isLoggedIn     = isLoggedIn,
-                        onboardingDone = onboardingDone,
-                    )
+                    if (isLoggedIn == true && pinEnabled && !unlocked) {
+                        PinLockScreen(
+                            mode = PinMode.ENTER,
+                            onCheck = { settingsManager.checkPin(it) },
+                            onSuccess = { unlocked = true },
+                        )
+                    } else {
+                        AppNavHost(
+                            navController  = navController,
+                            isLoggedIn     = isLoggedIn,
+                            onboardingDone = onboardingDone,
+                        )
+                    }
                 }
             }
         }

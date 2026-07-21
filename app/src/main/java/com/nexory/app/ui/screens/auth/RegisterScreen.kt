@@ -54,6 +54,7 @@ fun RegisterScreen(
                 .fillMaxWidth()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(horizontal = 24.dp, vertical = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

@@ -14,10 +14,11 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class CreateEventUiState(
-    val isLoading: Boolean   = false,
-    val isCreated: Boolean   = false,
-    val error:     String?   = null,
-    val loaded:    EventDto?  = null,   // для режима редактирования
+    val isLoading:     Boolean       = false,
+    val isCreated:     Boolean       = false,
+    val error:         String?       = null,
+    val invalidFields: Set<String>   = emptySet(),  // имена полей с ошибкой (для подсветки)
+    val loaded:        EventDto?      = null,        // для режима редактирования
 )
 
 @HiltViewModel
@@ -28,6 +29,19 @@ class CreateEventViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(CreateEventUiState())
     val uiState = _state.asStateFlow()
+
+    fun clearError() { _state.update { it.copy(error = null) } }
+
+    // Сопоставление имён полей сервера с UI-ключами (для подсветки ячеек)
+    private fun serverFieldToUi(field: String): String? = when (field) {
+        "title"            -> "title"
+        "address"          -> "address"
+        "starts_at"        -> "date"
+        "max_participants" -> "maxParticipants"
+        "price"            -> "price"
+        "description"      -> "description"
+        else -> null
+    }
 
     suspend fun uploadImage(uri: Uri): String? = uploader.upload(uri)
 
@@ -60,7 +74,7 @@ class CreateEventViewModel @Inject constructor(
         metro: String? = null,
     ) {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
+            _state.update { it.copy(isLoading = true, error = null, invalidFields = emptySet()) }
             try {
                 val body = buildMap<String, String?> {
                     put("title",      title)
@@ -82,13 +96,10 @@ class CreateEventViewModel @Inject constructor(
                 _state.update { it.copy(isLoading = false, isCreated = true) }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) return@launch
-                val msg = when {
-                    e.message?.contains("400") == true -> "Проверь правильность данных"
-                    e.message?.contains("401") == true -> "Нет прав. Попробуй заново войти"
-                    e.message?.contains("403") == true -> "Можно редактировать только свои мероприятия"
-                    else -> "Ошибка: ${e.message}"
-                }
-                _state.update { it.copy(isLoading = false, error = msg) }
+                val parsed = com.nexory.app.data.network.ApiError.parse(e)
+                // Переводим имена полей бэкенда в наши ключи для подсветки ячеек
+                val fields = parsed.fields.mapNotNull { serverFieldToUi(it) }.toSet()
+                _state.update { it.copy(isLoading = false, error = parsed.message, invalidFields = fields) }
             }
         }
     }

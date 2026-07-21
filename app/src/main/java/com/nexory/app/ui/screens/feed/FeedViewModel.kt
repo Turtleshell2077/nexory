@@ -29,15 +29,15 @@ data class FeedUiState(
     val maxPrice:    Int?           = null,
     val level:       String?        = null,   // категория профессионализма
     val metro:       String         = "",     // ближайшее метро
-    val useMyInterests: Boolean     = false,  // фильтр по любимым категориям из профиля
-    val myInterests: List<String>   = emptyList(),
+    val selectedInterests: Set<String> = emptySet(), // выбранные увлечения для фильтра
+    val myInterests: List<String>   = emptyList(),    // увлечения из профиля (для кнопки «вставить»)
     val myUserId:    String?        = null,
     val error:       String?        = null,
 ) {
     val activeFilterCount: Int
         get() = listOf(
             location.isNotBlank(), sort != "soon", freeOnly, maxPrice != null,
-            level != null, metro.isNotBlank(), useMyInterests,
+            level != null, metro.isNotBlank(), selectedInterests.isNotEmpty(),
         ).count { it }
 }
 
@@ -152,26 +152,50 @@ class FeedViewModel @Inject constructor(
     fun setMaxPrice(maxPrice: Int?) { _uiState.update { it.copy(maxPrice = maxPrice) }; debouncedAll() }
     fun setLevel(level: String?) { _uiState.update { it.copy(level = level) }; loadAll() }
     fun setMetro(metro: String) { _uiState.update { it.copy(metro = metro) }; debouncedAll() }
-    fun setUseMyInterests(on: Boolean) { _uiState.update { it.copy(useMyInterests = on) }; loadAll() }
+
+    // Увлечения-фильтр
+    fun toggleInterest(interest: String) {
+        val i = interest.trim()
+        if (i.isBlank()) return
+        _uiState.update {
+            val set = it.selectedInterests.toMutableSet()
+            if (!set.add(i)) set.remove(i)
+            it.copy(selectedInterests = set)
+        }
+        loadAll()
+    }
+    fun addInterest(interest: String) {
+        val i = interest.trim()
+        if (i.isBlank()) return
+        _uiState.update { it.copy(selectedInterests = it.selectedInterests + i) }
+        loadAll()
+    }
+    // Скопировать все увлечения из профиля в фильтр
+    fun useMyProfileInterests() {
+        _uiState.update { it.copy(selectedInterests = it.selectedInterests + it.myInterests) }
+        loadAll()
+    }
+    fun clearInterests() { _uiState.update { it.copy(selectedInterests = emptySet()) }; loadAll() }
 
     fun resetFilters() {
         _uiState.update { it.copy(
             location = "", sort = "soon", freeOnly = false, maxPrice = null, category = null,
-            level = null, metro = "", useMyInterests = false,
+            level = null, metro = "", selectedInterests = emptySet(),
         ) }
         loadAll()
     }
 
-    // Клиентский фильтр "по любимым категориям": оставляем события, чья категория/название
-    // совпадает с одним из интересов профиля. Сервер про интересы не знает.
+    // Клиентский фильтр по увлечениям: оставляем события, чья категория/название/описание
+    // совпадает хотя бы с одним выбранным увлечением. Сервер про увлечения не знает.
     private fun applyInterestFilter(events: List<EventDto>): List<EventDto> {
         val st = _uiState.value
-        if (!st.useMyInterests || st.myInterests.isEmpty()) return events
+        if (st.selectedInterests.isEmpty()) return events
         return events.filter { e ->
-            st.myInterests.any { interest ->
+            st.selectedInterests.any { interest ->
                 val i = interest.lowercase()
                 (e.category?.lowercase()?.contains(i) == true) ||
-                e.title.lowercase().contains(i)
+                e.title.lowercase().contains(i) ||
+                (e.description?.lowercase()?.contains(i) == true)
             }
         }
     }

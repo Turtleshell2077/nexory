@@ -51,6 +51,29 @@ fun formatEventTimeRange(startsAt: String?, endsAt: String?): String {
     return if (end != null) "${timeStr(start)}–${timeStr(end)}" else timeStr(start)
 }
 
+// "Создано сегодня" / "Создано вчера" / "Создано 3 дня назад" / "Создано 12 июн 2026"
+fun formatCreatedAt(createdAt: String?): String {
+    val dt = parse(createdAt) ?: return ""
+    val now = OffsetDateTime.now()
+    val days = java.time.Duration.between(dt, now).toDays()
+    return when {
+        days <= 0L && dt.dayOfYear == now.dayOfYear -> "Создано сегодня"
+        days <= 1L -> "Создано вчера"
+        days < 7L  -> "Создано ${days} ${plural(days, "день", "дня", "дней")} назад"
+        else       -> "Создано ${dt.dayOfMonth} ${MONTHS_SHORT[dt.monthValue - 1]} ${dt.year}"
+    }
+}
+
+// Русское склонение: 1 день, 2 дня, 5 дней
+private fun plural(n: Long, one: String, few: String, many: String): String {
+    val mod10 = n % 10; val mod100 = n % 100
+    return when {
+        mod10 == 1L && mod100 != 11L -> one
+        mod10 in 2..4 && mod100 !in 12..14 -> few
+        else -> many
+    }
+}
+
 // "Бесплатно" или "500 ₽"
 fun formatPrice(price: Double?): String {
     if (price == null || price <= 0.0) return "Бесплатно"

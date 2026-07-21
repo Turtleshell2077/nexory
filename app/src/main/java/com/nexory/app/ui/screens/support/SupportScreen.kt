@@ -71,8 +71,27 @@ fun SupportScreen(
     var category by remember { mutableStateOf("") }
     var expandedFaq by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(state.isSent) {
-        if (state.isSent) navController.popBackStack()
+    // После отправки — подтверждение с извинениями за неудобства, затем возврат
+    if (state.isSent) {
+        AlertDialog(
+            onDismissRequest = { navController.popBackStack() },
+            containerColor = NexoryColors.SurfaceDark,
+            shape = RoundedCornerShape(20.dp),
+            icon = { Icon(Icons.Default.CheckCircle, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(40.dp)) },
+            title = { Text("Сообщение отправлено", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Спасибо за обращение! Приносим извинения за возможные неудобства — " +
+                        "мы обязательно во всём разберёмся и ответим в течение 24 часов.",
+                    color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { navController.popBackStack() }) {
+                    Text("Понятно", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold)
+                }
+            },
+        )
     }
 
     Scaffold(
@@ -131,11 +150,11 @@ fun SupportScreen(
                     .background(NexoryColors.SurfaceDark)
                     .padding(16.dp),
             ) {
-                Text("Приложение ещё развивается 🚀", color = NexoryColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text("Чем помочь?", color = NexoryColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Мы только в начале пути и будем рады любым предложениям и отзывам. " +
-                        "Если заметишь ошибку или баг — расскажи нам, это очень поможет сделать Nexory лучше. Спасибо, что ты с нами!",
+                    "Опишите проблему или задайте вопрос — мы разберёмся и ответим. " +
+                        "Ниже собраны ответы на частые вопросы: возможно, решение уже там.",
                     color = NexoryColors.TextSecondary, fontSize = 13.sp, lineHeight = 19.sp,
                 )
             }

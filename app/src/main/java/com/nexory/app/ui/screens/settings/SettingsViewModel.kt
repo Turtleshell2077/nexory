@@ -26,6 +26,7 @@ data class SettingsUiState(
     val notifyFriendEvents:   Boolean   = true,
     val notifyInterestEvents: Boolean   = true,
     val profileVisibility:    String    = "friends",
+    val pinEnabled:           Boolean   = false,
 )
 
 @HiltViewModel
@@ -37,7 +38,7 @@ class SettingsViewModel @Inject constructor(
     private val _prefs = MutableStateFlow(ProfilePrefs())
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(settings.themeMode, _prefs) { theme, p ->
+        combine(settings.themeMode, settings.pinEnabled, _prefs) { theme, pin, p ->
             SettingsUiState(
                 themeMode = theme,
                 notificationsEnabled = p.notificationsEnabled,
@@ -45,6 +46,7 @@ class SettingsViewModel @Inject constructor(
                 notifyFriendEvents = p.notifyFriendEvents,
                 notifyInterestEvents = p.notifyInterestEvents,
                 profileVisibility = p.profileVisibility,
+                pinEnabled = pin,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiState())
 
@@ -85,4 +87,7 @@ class SettingsViewModel @Inject constructor(
             try { api.updateProfile(mapOf("profile_visibility" to level)) } catch (_: Exception) {}
         }
     }
+
+    fun setPin(pin: String) { viewModelScope.launch { settings.setPin(pin) } }
+    fun disablePin() { viewModelScope.launch { settings.disablePin() } }
 }
