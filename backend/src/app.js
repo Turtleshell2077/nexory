@@ -10,11 +10,11 @@ const routes      = require('./routes');
 
 const app = express();
 
-// За обратным прокси (nginx) — чтобы rate limit видел реальный IP клиента.
-// Включается через env, чтобы в dev (без прокси) не ослаблять защиту.
-if (process.env.TRUST_PROXY) {
-    app.set('trust proxy', Number(process.env.TRUST_PROXY) || 1);
-}
+// За обратным прокси (nginx) доверяем ОДНОМУ хопу, чтобы rate limit и логи видели
+// реальный IP клиента из X-Forwarded-For. Значение 1 (а не true) безопасно: клиент
+// не может подделать свой IP лишним заголовком. В dev без прокси заголовка нет —
+// Express берёт IP сокета, защита не слабеет. Переопределяется через env TRUST_PROXY.
+app.set('trust proxy', Number(process.env.TRUST_PROXY) || 1);
 
 // Безопасные заголовки. CORP отключаем, чтобы картинки из /uploads грузились с другого origin.
 app.use(helmet({ crossOriginResourcePolicy: false, contentSecurityPolicy: false }));
