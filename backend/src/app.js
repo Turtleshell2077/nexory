@@ -57,6 +57,15 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
     immutable: true,
 }));
 
+// Юридические документы (политика конфиденциальности, пользовательское соглашение).
+// Обязательны для модерации RuStore и Google Play: ссылки должны открываться и в
+// приложении (до регистрации), и в карточке магазина.
+// extensions:['html'] даёт чистые адреса: /legal/privacy → privacy.html
+app.use('/legal', express.static(path.join(__dirname, '../public/legal'), {
+    extensions: ['html'],
+    maxAge: '1h',
+}));
+
 // Healthcheck — для мониторинга/балансировщика
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 

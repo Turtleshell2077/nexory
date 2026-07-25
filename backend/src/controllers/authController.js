@@ -31,13 +31,31 @@ const register = async (req, res) => {
     const { username, email, password, phone } = req.body;
  
     try {
-        // Проверяем, не занят ли email или username
+        // Проверяем занятость БЕЗ учёта регистра: «Ivan» и «ivan» — один и тот же ник.
+        // Поиск людей идёт только по нику, поэтому двойники недопустимы.
+        // Отдаём разные сообщения, чтобы пользователь понимал, что именно исправить.
         const existing = await query(
-            'SELECT id FROM users WHERE email = $1 OR username = $2',
+            `SELECT
+                 BOOL_OR(LOWER(email) = LOWER($1))    AS email_taken,
+                 BOOL_OR(LOWER(username) = LOWER($2)) AS username_taken
+             FROM users
+             WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($2)`,
             [email, username]
         );
-        if (existing.rows.length > 0) {
-            return res.status(409).json({ error: 'Почта или никнейм уже заняты' });
+        const conflict = existing.rows[0];
+        if (conflict && (conflict.email_taken || conflict.username_taken)) {
+            const error = conflict.email_taken && conflict.username_taken
+                ? 'Почта и никнейм уже заняты'
+                : conflict.email_taken
+                    ? 'Эта почта уже зарегистрирована'
+                    : 'Такой никнейм уже занят — выберите другой';
+            return res.status(409).json({
+                error,
+                details: [{
+                    field: conflict.email_taken ? 'email' : 'username',
+                    msg: error,
+                }],
+            });
         }
  
         // bcrypt с cost factor 12 — хороший баланс безопасности и скорости.

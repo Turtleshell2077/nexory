@@ -165,6 +165,12 @@ interface NexoryApi {
     @PUT("users/me/password")
     suspend fun changePassword(@Body body: Map<String, String>): Map<String, String>
 
+    // Удаление аккаунта и всех данных (требование Google Play).
+    // @HTTP вместо @DELETE — Retrofit разрешает тело у DELETE только так,
+    // а тело нужно для подтверждения паролём.
+    @HTTP(method = "DELETE", path = "users/me", hasBody = true)
+    suspend fun deleteAccount(@Body body: Map<String, String>): Map<String, String>
+
     // Обновить FCM-токен — вызывается при получении нового токена из Firebase
     @PUT("users/me/fcm-token")
     suspend fun updateFcmToken(@Body body: Map<String, String>): Map<String, String>

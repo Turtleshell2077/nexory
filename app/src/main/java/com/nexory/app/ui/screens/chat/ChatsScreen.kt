@@ -171,12 +171,31 @@ fun ChatListItem(
             )
             Spacer(Modifier.width(12.dp))
         }
-        Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(Brush.linearGradient(listOf(NexoryColors.DeepBlue.copy(0.6f), NexoryColors.Violet.copy(0.6f)))), contentAlignment = Alignment.Center) {
-            val avatar = chat.avatarUrl ?: chat.peer?.avatarUrl
-            if (avatar != null) {
-                AsyncImage(model = avatar, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().clip(CircleShape))
-            } else {
-                Icon(when (chat.type) { "event" -> Icons.Default.Event; "support" -> Icons.Default.Support; else -> Icons.Default.Person }, null, tint = Color.White, modifier = Modifier.size(24.dp))
+        val avatar = chat.avatarUrl ?: chat.peer?.avatarUrl
+        if (chat.type == "direct") {
+            // Личный чат — это человек, поэтому при отсутствии фото рисуем
+            // генеративный аватар по id собеседника (детерминированный, узнаваемый).
+            com.nexory.app.ui.components.UserAvatar(
+                url = avatar,
+                name = chat.peer?.username ?: title,
+                seed = chat.peer?.id ?: chat.id,
+                size = 52.dp,
+            )
+        } else {
+            // Чат мероприятия или поддержки — не человек, оставляем предметную иконку
+            Box(
+                modifier = Modifier.size(52.dp).clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(NexoryColors.DeepBlue.copy(0.6f), NexoryColors.Violet.copy(0.6f)))),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (avatar != null) {
+                    AsyncImage(model = avatar, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().clip(CircleShape))
+                } else {
+                    Icon(
+                        if (chat.type == "support") Icons.Default.Support else Icons.Default.Event,
+                        null, tint = Color.White, modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         }
         Spacer(Modifier.width(12.dp))

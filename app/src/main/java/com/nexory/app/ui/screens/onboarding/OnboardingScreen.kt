@@ -66,8 +66,10 @@ fun OnboardingScreen(
     val scope = rememberCoroutineScope()
     val isLast = pagerState.currentPage == SLIDES.lastIndex
 
+    // После онбординга — экран согласия с документами (он уже ведёт на вход).
+    // Так политика конфиденциальности гарантированно показывается до регистрации.
     fun done() = viewModel.finish {
-        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+        navController.navigate(Screen.Consent.route) { popUpTo(0) { inclusive = true } }
     }
 
     Column(

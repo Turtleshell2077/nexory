@@ -30,8 +30,100 @@ fun SettingsScreen(
     navController: NavController,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val state by viewModel.uiState.collectAsState()
+    val deleteState by viewModel.deleteState.collectAsState()
     var showSetPin by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deletePassword by remember { mutableStateOf("") }
+
+    // Разрешение на уведомления (Android 13+) + диалог с объяснением перед запросом
+    val notifPermission = com.nexory.app.ui.components.rememberNotificationPermission()
+    var showNotifRationale by remember { mutableStateOf(false) }
+
+    if (showNotifRationale) {
+        AlertDialog(
+            onDismissRequest = { showNotifRationale = false },
+            containerColor = NexoryColors.SurfaceDark,
+            shape = RoundedCornerShape(20.dp),
+            icon = { Icon(Icons.Default.Notifications, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(36.dp)) },
+            title = { Text("Разрешить уведомления?", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Уведомления нужны, чтобы вы вовремя узнавали о новых сообщениях в чатах, " +
+                        "заявках в друзья и мероприятиях по вашим интересам.\n\n" +
+                        "Разрешение используется только для этого. Отключить можно в любой момент здесь же.",
+                    color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showNotifRationale = false; notifPermission.request() }) {
+                    Text("Разрешить", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotifRationale = false }) {
+                    Text("Не сейчас", color = NexoryColors.TextSecondary)
+                }
+            },
+        )
+    }
+
+    // Диалог удаления аккаунта: явное предупреждение о необратимости + подтверждение паролём
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!deleteState.isLoading) { showDeleteDialog = false; deletePassword = "" } },
+            containerColor = NexoryColors.SurfaceDark,
+            shape = RoundedCornerShape(20.dp),
+            icon = { Icon(Icons.Default.WarningAmber, null, tint = NexoryColors.Error, modifier = Modifier.size(36.dp)) },
+            title = { Text("Удалить аккаунт?", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Будут безвозвратно удалены: профиль и фотография, созданные вами " +
+                            "мероприятия, ваши сообщения, друзья и заявки, настройки. " +
+                            "Восстановить аккаунт будет невозможно.",
+                        color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = deletePassword,
+                        onValueChange = { deletePassword = it; viewModel.clearDeleteError() },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !deleteState.isLoading,
+                        label = { Text("Пароль для подтверждения") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        isError = deleteState.error != null,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = com.nexory.app.ui.components.nexoryTextFieldColors(),
+                    )
+                    deleteState.error?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text(it, color = NexoryColors.Error, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.deleteAccount(deletePassword) },
+                    enabled = !deleteState.isLoading && deletePassword.isNotBlank(),
+                ) {
+                    if (deleteState.isLoading) {
+                        CircularProgressIndicator(color = NexoryColors.Error, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Удалить навсегда", color = NexoryColors.Error, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteDialog = false; deletePassword = "" },
+                    enabled = !deleteState.isLoading,
+                ) { Text("Отмена", color = NexoryColors.TextSecondary) }
+            },
+        )
+    }
 
     // Экран установки PIN поверх настроек
     if (showSetPin) {
@@ -89,6 +181,31 @@ fun SettingsScreen(
 
             // ---- Уведомления ----
             SettingsSectionLabel("Уведомления")
+
+            // Если системное разрешение не выдано, уведомления физически не придут
+            // (Android 13+). Показываем понятное объяснение и кнопку запроса —
+            // разрешение просим ровно в момент, когда оно нужно.
+            if (notifPermission.shouldAsk) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(NexoryColors.PrimaryBlue.copy(alpha = 0.12f))
+                        .clickable { showNotifRationale = true }
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.NotificationsOff, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Разрешите уведомления", color = NexoryColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("Без разрешения системы сообщения и события не придут",
+                            color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                    }
+                    Text("Разрешить", color = NexoryColors.PrimaryBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -100,7 +217,11 @@ fun SettingsScreen(
                     subtitle = "Главный переключатель",
                     checked = state.notificationsEnabled,
                     enabled = true,
-                    onCheckedChange = { viewModel.setNotificationsEnabled(it) },
+                    onCheckedChange = { on ->
+                        viewModel.setNotificationsEnabled(on)
+                        // Включают уведомления — самое время попросить системное разрешение
+                        if (on && notifPermission.shouldAsk) showNotifRationale = true
+                    },
                 )
                 HorizontalDivider(color = NexoryColors.SurfaceMid)
                 NotifyRow(
@@ -189,22 +310,73 @@ fun SettingsScreen(
                 )
             }
 
-            // ---- О приложении ----
+            // ---- О приложении: версия + юр. документы ----
             SettingsSectionLabel("О приложении")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(NexoryColors.SurfaceDark),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.Info, null, tint = NexoryColors.TextSecondary)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Nexory", color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f))
+                    Text("v1.0.0", color = NexoryColors.TextSecondary, fontSize = 13.sp)
+                }
+                HorizontalDivider(color = NexoryColors.SurfaceMid)
+                // Документы должны быть доступны и из настроек (требование обоих сторов)
+                LegalRow("Политика конфиденциальности") {
+                    com.nexory.app.ui.components.openExternalUrl(context, com.nexory.app.NexoryConfig.PRIVACY_URL)
+                }
+                HorizontalDivider(color = NexoryColors.SurfaceMid)
+                LegalRow("Пользовательское соглашение") {
+                    com.nexory.app.ui.components.openExternalUrl(context, com.nexory.app.NexoryConfig.TERMS_URL)
+                }
+            }
+
+            // ---- Аккаунт: удаление (требование Google Play) ----
+            SettingsSectionLabel("Аккаунт")
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .background(NexoryColors.SurfaceDark)
+                    .clickable { showDeleteDialog = true }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Default.Info, null, tint = NexoryColors.TextSecondary)
+                Icon(Icons.Default.DeleteForever, null, tint = NexoryColors.Error)
                 Spacer(Modifier.width(12.dp))
-                Text("Nexory", color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f))
-                Text("v1.0.0", color = NexoryColors.TextSecondary, fontSize = 13.sp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Удалить аккаунт", color = NexoryColors.Error, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text("Профиль и все данные будут удалены безвозвратно",
+                        color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = NexoryColors.TextSecondary)
             }
+
+            Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+@Composable
+private fun LegalRow(title: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Default.Shield, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(title, color = NexoryColors.TextPrimary, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Icon(Icons.Default.OpenInNew, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(16.dp))
     }
 }
 

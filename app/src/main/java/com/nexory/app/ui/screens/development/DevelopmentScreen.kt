@@ -1,9 +1,5 @@
 package com.nexory.app.ui.screens.development
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,13 +32,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import androidx.compose.material3.ExperimentalMaterial3Api
 
-// ⚠️ ВЛАДЕЛЬЦУ (реквизиты приёма перевода):
-// DONATION_URL — ссылка на платёжную страницу Т-банка, привязанную к твоему счёту.
-// Плательщик открывает её, выбирает свой банк и переводит — ТВОЙ номер/карта нигде
-// в приложении НЕ показываются, они «зашиты» в саму ссылку на стороне банка.
-// Сделать её можно в Т-банке: «Собрать деньги» / «Мне переведут». Вид: https://www.tinkoff.ru/rm/xxxxx
-// Сумма из поля подставляется в ссылку параметром ?amount= (если страница это поддерживает).
-private const val DONATION_URL = "https://www.tinkoff.ru/rm/"
+// Реквизиты приёма переводов живут в data/donation/BankLinkDonationService.kt —
+// экран о них ничего не знает и работает через интерфейс DonationService.
 
 private data class Roadmap(val title: String, val text: String)
 
@@ -62,24 +53,84 @@ private val ROADMAP = listOf(
 @HiltViewModel
 class DevelopmentViewModel @Inject constructor(
     private val api: NexoryApi,
+    private val donationService: com.nexory.app.data.donation.DonationService,
 ) : ViewModel() {
     private val _sent = MutableStateFlow(false)
     val sent = _sent.asStateFlow()
     private val _loading = MutableStateFlow(false)
     val loading = _loading.asStateFlow()
 
+    /** Ошибка отправки предложения — раньше молча проглатывалась. */
+    private val _suggestionError = MutableStateFlow<String?>(null)
+    val suggestionError = _suggestionError.asStateFlow()
+
+    /** Что умеет текущая реализация оплаты — UI рисует флоу по этим флагам. */
+    val donationCapabilities = donationService.capabilities
+
+    private val _donationState = MutableStateFlow<DonationUiState>(DonationUiState.Idle)
+    val donationState = _donationState.asStateFlow()
+
     fun sendSuggestion(text: String, onDone: () -> Unit) {
         if (text.isBlank()) return
         viewModelScope.launch {
             _loading.value = true
+            _suggestionError.value = null
             try {
                 api.createSupportTicket(mapOf("subject" to "Предложение по развитию", "body" to text))
                 _sent.value = true
                 onDone()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                // Раньше исключение игнорировалось и кнопка просто «ничего не делала»
+                _suggestionError.value = com.nexory.app.data.network.ApiError.message(e)
+            }
             _loading.value = false
         }
     }
+
+    fun clearSuggestionError() { _suggestionError.value = null }
+
+    /** Начать пожертвование. Все ветки результата приводим к состоянию для UI. */
+    fun donate(context: android.content.Context) {
+        viewModelScope.launch {
+            _donationState.value = DonationUiState.Starting
+            val result = donationService.start(context)
+            _donationState.value = when (result) {
+                is com.nexory.app.data.donation.DonationResult.OpenedExternally ->
+                    DonationUiState.AwaitingReturn
+                is com.nexory.app.data.donation.DonationResult.Failed -> when (result.reason) {
+                    com.nexory.app.data.donation.DonationError.NO_NETWORK ->
+                        DonationUiState.Error("Нет подключения к интернету. Страница оплаты не откроется — проверьте связь и попробуйте снова")
+                    com.nexory.app.data.donation.DonationError.CANNOT_OPEN ->
+                        DonationUiState.Error("Не удалось открыть страницу оплаты. Проверьте, что на устройстве установлен браузер")
+                    com.nexory.app.data.donation.DonationError.NOT_CONFIGURED ->
+                        DonationUiState.Error("Приём переводов пока не настроен. Мы включим его в одном из следующих обновлений")
+                }
+            }
+        }
+    }
+
+    /**
+     * Пользователь вернулся в приложение после перехода на страницу банка.
+     * Подтвердить оплату мы не можем (вебхука нет), поэтому формулировка нейтральная.
+     */
+    fun onReturnedFromPayment() {
+        if (_donationState.value is DonationUiState.AwaitingReturn) {
+            _donationState.value = DonationUiState.Returned
+        }
+    }
+
+    fun dismissDonationState() { _donationState.value = DonationUiState.Idle }
+}
+
+/** Состояние процесса пожертвования для UI. */
+sealed interface DonationUiState {
+    data object Idle : DonationUiState
+    data object Starting : DonationUiState
+    /** Браузер/банк открыт, ждём возвращения пользователя. */
+    data object AwaitingReturn : DonationUiState
+    /** Пользователь вернулся; статус платежа неизвестен. */
+    data object Returned : DonationUiState
+    data class Error(val message: String) : DonationUiState
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,7 +144,44 @@ fun DevelopmentScreen(
     var suggestion by remember { mutableStateOf("") }
     var suggestionSent by remember { mutableStateOf(false) }
     var roadmapExpanded by remember { mutableStateOf(false) }
-    var amount by remember { mutableStateOf("") }
+    val donationState by viewModel.donationState.collectAsState()
+    val suggestionError by viewModel.suggestionError.collectAsState()
+
+    // Пользователь вернулся в приложение со страницы банка. Подтвердить оплату мы
+    // не можем (вебхука нет), поэтому просто показываем нейтральное сообщение.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.onReturnedFromPayment()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (donationState is DonationUiState.Returned) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDonationState() },
+            containerColor = NexoryColors.SurfaceDark,
+            shape = RoundedCornerShape(20.dp),
+            icon = { Icon(Icons.Default.Favorite, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(36.dp)) },
+            title = { Text("Спасибо!", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Если оплата прошла успешно, поддержка проекта уже учтена.\n\n" +
+                        "Приложение не получает данных о платеже, поэтому проверить статус " +
+                        "перевода можно в истории операций вашего банка.",
+                    color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissDonationState() }) {
+                    Text("Понятно", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold)
+                }
+            },
+        )
+    }
 
     Scaffold(
         containerColor = NexoryColors.DeepBlack,
@@ -154,12 +242,18 @@ fun DevelopmentScreen(
             } else {
                 OutlinedTextField(
                     value = suggestion,
-                    onValueChange = { suggestion = it },
+                    onValueChange = { suggestion = it; viewModel.clearSuggestionError() },
                     modifier = Modifier.fillMaxWidth().height(120.dp),
                     placeholder = { Text("Что можно улучшить или добавить?", color = NexoryColors.TextSecondary) },
+                    isError = suggestionError != null,
                     shape = RoundedCornerShape(12.dp),
                     colors = nexoryTextFieldColors(),
                 )
+                // Раньше ошибка отправки проглатывалась и кнопка «ничего не делала»
+                suggestionError?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, color = NexoryColors.Error, fontSize = 12.sp)
+                }
                 Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = { viewModel.sendSuggestion(suggestion) { suggestionSent = true; suggestion = "" } },
@@ -213,7 +307,7 @@ fun DevelopmentScreen(
                 }
             }
 
-            // 4. Поддержать проект — оплата без раскрытия номера
+            // 4. Поддержать проект — оплата на стороне банка, реквизиты не раскрываются
             SectionTitle("Поддержать проект")
             Column(
                 modifier = Modifier
@@ -223,30 +317,33 @@ fun DevelopmentScreen(
                     .padding(16.dp),
             ) {
                 Text(
-                    "Поддержи проект любой суммой — это ускоряет выход новых функций. " +
-                        "Оплата проходит через защищённую страницу банка: реквизиты получателя " +
-                        "не раскрываются, привязывать ничего не нужно.",
+                    "Поддержать проект можно добровольным переводом любой суммы — это ускоряет " +
+                        "выход новых функций. Сумму вы вводите на защищённой странице банка, " +
+                        "там же подтверждаете перевод.",
                     color = NexoryColors.TextSecondary, fontSize = 13.sp, lineHeight = 19.sp,
                 )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Default.Lock, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(14.dp).padding(top = 3.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Никакие платёжные данные не проходят через приложение и нигде в нём не отображаются.",
+                        color = NexoryColors.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp,
+                    )
+                }
+
                 Spacer(Modifier.height(14.dp))
-                OutlinedTextField(
-                    value = amount,
-                    onValueChange = { v -> amount = v.filter { it.isDigit() }.take(6) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text("Сумма, ₽ (по желанию)", color = NexoryColors.TextSecondary) },
-                    leadingIcon = { Icon(Icons.Default.Payments, null) },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = nexoryTextFieldColors(),
-                )
-                Spacer(Modifier.height(12.dp))
+
+                val isStarting = donationState is DonationUiState.Starting
                 Button(
-                    onClick = { openUrl(context, buildPayUrl(amount)) },
+                    onClick = { viewModel.donate(context) },
+                    enabled = !isStarting,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                    ),
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     Box(
@@ -255,12 +352,37 @@ fun DevelopmentScreen(
                         ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Favorite, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
+                        if (isStarting) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Favorite, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Поддержать проект", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                            }
+                        }
+                    }
+                }
+
+                // Ошибка: нет сети / нет браузера / приём не настроен
+                (donationState as? DonationUiState.Error)?.let { err ->
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(NexoryColors.Error.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(Icons.Default.ErrorOutline, null, tint = NexoryColors.Error, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(err.message, color = NexoryColors.Error, fontSize = 12.sp, lineHeight = 17.sp)
+                            Spacer(Modifier.height(6.dp))
                             Text(
-                                if (amount.isBlank()) "Перейти к оплате" else "Поддержать на $amount ₽",
-                                color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                                "Попробовать снова",
+                                color = NexoryColors.PrimaryBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clickable { viewModel.donate(context) },
                             )
                         }
                     }
@@ -272,19 +394,10 @@ fun DevelopmentScreen(
     }
 }
 
-// Собираем ссылку на оплату: если указана сумма — добавляем ?amount=
-private fun buildPayUrl(amount: String): String =
-    if (amount.isBlank()) DONATION_URL else "$DONATION_URL?amount=$amount"
-
 @Composable
 private fun SectionTitle(text: String) {
     Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextSecondary, letterSpacing = 0.5.sp)
 }
 
-private fun openUrl(context: Context, url: String) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-    } catch (e: Exception) {
-        Toast.makeText(context, "Не удалось открыть ссылку оплаты", Toast.LENGTH_SHORT).show()
-    }
-}
+// openUrl удалён: открытие внешних ссылок централизовано в
+// ui/components/UrlOpener.kt и используется через DonationService.

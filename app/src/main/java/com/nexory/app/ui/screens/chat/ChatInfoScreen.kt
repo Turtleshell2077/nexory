@@ -208,12 +208,20 @@ fun ChatInfoScreen(
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        AsyncImage(
-                            model = member.avatarUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(44.dp).clip(CircleShape).background(NexoryColors.SurfaceMid),
+                        com.nexory.app.ui.components.UserAvatar(
+                            url = member.avatarUrl,
+                            name = member.displayName?.takeIf { it.isNotBlank() } ?: member.username,
+                            seed = member.id,
+                            size = 44.dp,
                         )
                         Spacer(Modifier.width(12.dp))
-                        Text(member.username, color = NexoryColors.TextPrimary, fontSize = 15.sp)
+                        Column {
+                            Text(
+                                member.displayName?.takeIf { it.isNotBlank() } ?: member.username,
+                                color = NexoryColors.TextPrimary, fontSize = 15.sp,
+                            )
+                            Text("@${member.username}", color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                        }
                     }
                 }
             }

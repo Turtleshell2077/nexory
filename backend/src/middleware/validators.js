@@ -49,6 +49,9 @@ module.exports = {
             body('newPassword').isLength({ min: 8 }).withMessage('Новый пароль минимум 8 символов'),
         ],
         search: [ query('q').trim().isLength({ min: 2 }).withMessage('Минимум 2 символа') ],
+        deleteAccount: [
+            body('password').notEmpty().withMessage('Введите пароль для подтверждения'),
+        ],
     },
 
     chats: {

@@ -103,15 +103,14 @@ fun ProfileScreen(
                     modifier            = Modifier.padding(bottom = 20.dp),
                 ) {
                     Box(contentAlignment = Alignment.BottomEnd) {
-                        AsyncImage(
-                            model              = uiState.user?.avatarUrl,
-                            contentDescription = "Аватар",
-                            contentScale       = ContentScale.Crop,
-                            modifier           = Modifier
-                                .size(88.dp)
-                                .clip(CircleShape)
-                                .background(NexoryColors.SurfaceMid)
-                                .clickable { showAvatarFull = true },   // тап → открыть аватар
+                        // Нет фото — показываем тот же генеративный аватар, который видят
+                        // другие пользователи, чтобы владелец профиля понимал, как выглядит
+                        com.nexory.app.ui.components.UserAvatar(
+                            url  = uiState.user?.avatarUrl,
+                            name = uiState.user?.displayName?.takeIf { it.isNotBlank() } ?: uiState.user?.username,
+                            seed = uiState.user?.id,
+                            size = 88.dp,
+                            modifier = Modifier.clickable { showAvatarFull = true },   // тап → открыть аватар
                         )
                         if (uiState.uploadingAvatar) {
                             Box(

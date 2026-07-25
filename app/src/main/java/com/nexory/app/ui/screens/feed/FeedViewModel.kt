@@ -33,6 +33,10 @@ data class FeedUiState(
     val myInterests: List<String>   = emptyList(),    // увлечения из профиля (для кнопки «вставить»)
     val myUserId:    String?        = null,
     val error:       String?        = null,
+    // ---- Оффлайн-режим ----
+    val isOffline:   Boolean        = false,  // нет сети
+    val isFromCache: Boolean        = false,  // показываем сохранённые данные
+    val cachedAt:    Long?          = null,   // когда кэш обновлялся
 ) {
     val activeFilterCount: Int
         get() = listOf(
@@ -45,6 +49,8 @@ data class FeedUiState(
 class FeedViewModel @Inject constructor(
     private val api: NexoryApi,
     private val tokenManager: TokenManager,
+    private val cache: com.nexory.app.data.local.OfflineCache,
+    private val connectivity: com.nexory.app.data.network.ConnectivityObserver,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FeedUiState())
@@ -58,13 +64,32 @@ class FeedViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             _uiState.update { it.copy(myUserId = tokenManager.getUserId()) }
-            // Подтягиваем любимые категории (виды спорта) из профиля для фильтра "по интересам"
+            // Любимые категории берём из кэша профиля, если сети нет
             try {
                 val sports = api.getMyProfile().user?.sports
                 val interests = sports?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
                 _uiState.update { it.copy(myInterests = interests) }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                val cachedSports = cache.loadMyProfile()?.sports
+                val interests = cachedSports?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+                if (interests.isNotEmpty()) _uiState.update { it.copy(myInterests = interests) }
+            }
         }
+
+        // Следим за состоянием сети: как только связь вернулась и мы показывали
+        // кэш — молча подгружаем свежие данные.
+        viewModelScope.launch {
+            connectivity.isOnlineFlow.collect { online ->
+                val wasFromCache = _uiState.value.isFromCache
+                _uiState.update { it.copy(isOffline = !online) }
+                if (online && wasFromCache) {
+                    lastRefresh = 0L   // сбрасываем троттлинг, чтобы обновиться сразу
+                    loadAll()
+                    loadMy()
+                }
+            }
+        }
+
         refresh()   // первичная загрузка сразу, не дожидаясь RESUMED
     }
 
@@ -94,12 +119,42 @@ class FeedViewModel @Inject constructor(
                     level    = state.level,
                     metro    = state.metro.takeIf { it.isNotBlank() },
                 )
+                // Кэшируем «сырой» ответ сервера: фильтры по интересам применяем при показе,
+                // иначе оффлайн-лента зависела бы от фильтра, активного в момент сохранения.
+                cache.saveFeed(feed.upcoming, feed.past)
+
                 val upcoming = applyInterestFilter(feed.upcoming)
                 val past     = applyInterestFilter(feed.past)
-                _uiState.update { it.copy(isLoading = false, upcoming = upcoming, past = past) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false, upcoming = upcoming, past = past,
+                        isFromCache = false, cachedAt = null, error = null,
+                    )
+                }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) return@launch
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
+                // Сеть недоступна — показываем последнюю сохранённую ленту вместо пустого экрана
+                val cachedUpcoming = cache.loadFeedUpcoming()
+                val cachedPast     = cache.loadFeedPast()
+                if (cachedUpcoming.isNotEmpty() || cachedPast.isNotEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading   = false,
+                            upcoming    = applyInterestFilter(cachedUpcoming),
+                            past        = applyInterestFilter(cachedPast),
+                            isFromCache = true,
+                            cachedAt    = cache.feedCachedAt(),
+                            error       = null,   // не пугаем ошибкой: данные-то есть
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = com.nexory.app.data.network.ApiError.message(e),
+                        )
+                    }
+                }
             }
         }
     }
@@ -108,8 +163,16 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 myRaw = api.getMyEvents()["events"] ?: emptyList()
+                cache.saveMyEvents(myRaw)
                 applyMyFilter()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+                // Оффлайн — берём последние сохранённые «мои записи»
+                val cached = cache.loadMyEvents()
+                if (cached.isNotEmpty()) {
+                    myRaw = cached
+                    applyMyFilter()
+                }
+            }
         }
     }
 

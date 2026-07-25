@@ -149,15 +149,19 @@ fun UserAvatar(
         )
     } else {
         val key = (seed ?: name ?: "?")
+        // Градиент и инициалы детерминированы по ключу — считаем один раз на ключ,
+        // а не на каждую рекомпозицию (аватары рисуются в длинных списках).
+        val gradient = remember(key) { gradientFor(key) }
+        val initials = remember(name) { initialsOf(name) }
         Box(
             modifier = modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(Brush.linearGradient(gradientFor(key))),
+                .background(Brush.linearGradient(gradient)),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = initialsOf(name),
+                text = initials,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = (size.value * 0.38f).sp,
@@ -177,7 +181,11 @@ fun MetroAutocompleteField(
 ) {
     // Показываем подсказки только когда пользователь печатает (а не после выбора)
     var showSuggestions by remember { mutableStateOf(false) }
-    val suggestions = if (showSuggestions) MoscowMetro.suggest(value) else emptyList()
+    // remember(value, showSuggestions) обязателен: без него фильтрация ~300 станций
+    // выполнялась на КАЖДОЙ рекомпозиции этого поля, а не только при смене текста.
+    val suggestions = remember(value, showSuggestions) {
+        if (showSuggestions) MoscowMetro.suggest(value) else emptyList()
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(

@@ -23,6 +23,7 @@ import androidx.navigation.NavController
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.theme.NexoryColors
 import com.nexory.app.ui.components.nexoryTextFieldColors
+import com.nexory.app.ui.components.LegalFooter
 
 @Composable
 fun LoginScreen(
@@ -197,7 +198,14 @@ fun LoginScreen(
                 )
             }
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(8.dp))
+
+            // Ссылки на юр. документы прямо на экране входа.
+            // Требование модерации RuStore: политика конфиденциальности должна быть
+            // доступна пользователю до авторизации, а не только в глубине настроек.
+            LegalFooter()
+
+            Spacer(Modifier.height(28.dp))
         }
     }
 }

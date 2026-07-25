@@ -21,6 +21,8 @@ data class ChatUiState(
     val isLoading:       Boolean          = false,
     val oldestMessageId: String?          = null,
     val hasMore:         Boolean          = true,
+    /** Сообщения показаны из локального кэша — отправка недоступна до появления сети. */
+    val isFromCache:     Boolean          = false,
 )
 
 @HiltViewModel
@@ -28,6 +30,7 @@ class ChatViewModel @Inject constructor(
     private val api:          NexoryApi,
     private val wsManager:    ChatWebSocketManager,
     private val tokenManager: TokenManager,
+    private val cache:        com.nexory.app.data.local.OfflineCache,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -56,17 +59,29 @@ class ChatViewModel @Inject constructor(
 
             try {
                 val messages = api.getMessages(chatId)["messages"] ?: emptyList()
+                cache.saveMessages(chatId, messages)
                 _uiState.update {
                     it.copy(
                         messages        = messages,
                         isLoading       = false,
                         oldestMessageId = messages.firstOrNull()?.id,
                         hasMore         = messages.size >= 30,
+                        isFromCache     = false,
                     )
                 }
                 wsManager.markRead(chatId)
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false) }
+                // Оффлайн: показываем последние сохранённые сообщения только для чтения.
+                // Отправка при этом останется недоступной (см. isFromCache в UI).
+                val cached = cache.loadMessages(chatId)
+                _uiState.update {
+                    it.copy(
+                        messages    = cached,
+                        isLoading   = false,
+                        hasMore     = false,       // подгружать историю без сети нельзя
+                        isFromCache = cached.isNotEmpty(),
+                    )
+                }
             }
         }
 

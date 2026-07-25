@@ -3,18 +3,30 @@
 
     <!-- Интернет для REST + WebSocket -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Push-уведомления (FCM) -->
+    <!-- Проверка наличия сети для оффлайн-режима (не даёт доступа к данным) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+      Push-уведомления (FCM). На Android 13+ (API 33) требует запроса в рантайме —
+      запрашиваем в Настройках при включении уведомлений, с объяснением зачем.
+    -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Для выбора фото профиля -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!--
+      Разрешение READ_MEDIA_IMAGES намеренно НЕ запрашивается.
+      Выбор фото идёт через системный выбор документов (ACTION_GET_CONTENT),
+      который выдаёт временный доступ только к выбранному файлу и не требует
+      доступа ко всей галерее. Лишние разрешения — повод для замечаний
+      при модерации и лишние строки в Data Safety.
+    -->
 
     <application
         android:name=".NexoryApp"
         android:label="Nexory"
         android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.Nexory"
-        android:usesCleartextTraffic="true"
-        android:allowBackup="true">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:allowBackup="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

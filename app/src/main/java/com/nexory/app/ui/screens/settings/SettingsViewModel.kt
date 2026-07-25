@@ -33,9 +33,15 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val settings: SettingsManager,
     private val api:      NexoryApi,
+    private val tokenManager: com.nexory.app.data.local.TokenManager,
+    private val cache:    com.nexory.app.data.local.OfflineCache,
 ) : ViewModel() {
 
     private val _prefs = MutableStateFlow(ProfilePrefs())
+
+    // Состояние удаления аккаунта
+    private val _deleteState = MutableStateFlow(DeleteAccountState())
+    val deleteState = _deleteState.asStateFlow()
 
     val uiState: StateFlow<SettingsUiState> =
         combine(settings.themeMode, settings.pinEnabled, _prefs) { theme, pin, p ->
@@ -90,4 +96,41 @@ class SettingsViewModel @Inject constructor(
 
     fun setPin(pin: String) { viewModelScope.launch { settings.setPin(pin) } }
     fun disablePin() { viewModelScope.launch { settings.disablePin() } }
+
+    /**
+     * Удаление аккаунта и всех данных (требование Google Play).
+     * После успешного удаления чистим локальные токены и настройки — приложение
+     * само уйдёт на экран входа, т.к. isLoggedIn станет false.
+     */
+    fun deleteAccount(password: String) {
+        if (password.isBlank()) {
+            _deleteState.value = DeleteAccountState(error = "Введите пароль")
+            return
+        }
+        viewModelScope.launch {
+            _deleteState.value = DeleteAccountState(isLoading = true)
+            try {
+                api.deleteAccount(mapOf("password" to password))
+                // Полностью убираем локальные следы: кэш данных, PIN и токены.
+                // Согласие с документами оставляем — оно относится к устройству,
+                // а не к аккаунту, и повторно спрашивать его незачем.
+                cache.clearAll()
+                settings.disablePin()
+                tokenManager.clear()
+                _deleteState.value = DeleteAccountState(isDeleted = true)
+            } catch (e: Exception) {
+                _deleteState.value = DeleteAccountState(
+                    error = com.nexory.app.data.network.ApiError.message(e)
+                )
+            }
+        }
+    }
+
+    fun clearDeleteError() { _deleteState.update { it.copy(error = null) } }
 }
+
+data class DeleteAccountState(
+    val isLoading: Boolean = false,
+    val isDeleted: Boolean = false,
+    val error:     String? = null,
+)

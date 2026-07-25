@@ -89,52 +89,72 @@ fun ChatDetailScreen(
             )
         },
         bottomBar = {
-            // ---- Поле ввода сообщения ----
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(NexoryColors.SurfaceDark)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .navigationBarsPadding()
-                    .imePadding(), // поднимаемся над клавиатурой
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedTextField(
-                    value         = inputText,
-                    onValueChange = { inputText = it },
-                    modifier      = Modifier.weight(1f),
-                    placeholder   = { Text("Написать...", color = NexoryColors.TextSecondary) },
-                    maxLines      = 4,
-                    shape         = RoundedCornerShape(22.dp),
-                    colors        = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor      = NexoryColors.PrimaryBlue,
-                        unfocusedBorderColor    = NexoryColors.SurfaceMid,
-                        focusedContainerColor   = NexoryColors.SurfaceMid,
-                        unfocusedContainerColor = NexoryColors.SurfaceMid,
-                        focusedTextColor        = NexoryColors.TextPrimary,
-                        unfocusedTextColor      = NexoryColors.TextPrimary,
-                    ),
-                )
-                Spacer(Modifier.width(8.dp))
-                // Кнопка отправки
-                IconButton(
-                    onClick = {
-                        val text = inputText.trim()
-                        if (text.isNotEmpty()) {
-                            viewModel.sendMessage(chatId, text)
-                            inputText = ""
-                        }
-                    },
+            Column {
+                // Оффлайн: история доступна для чтения, отправка — нет.
+                com.nexory.app.ui.components.OfflineBanner(visible = uiState.isFromCache)
+
+                // ---- Поле ввода сообщения ----
+                val canSend = !uiState.isFromCache
+                Row(
                     modifier = Modifier
-                        .size(48.dp)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(NexoryColors.GradientStart, NexoryColors.GradientEnd)
-                            ),
-                            CircleShape
-                        ),
+                        .fillMaxWidth()
+                        .background(NexoryColors.SurfaceDark)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .navigationBarsPadding()
+                        .imePadding(), // поднимаемся над клавиатурой
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Default.Send, null, tint = Color.White)
+                    OutlinedTextField(
+                        value         = inputText,
+                        onValueChange = { inputText = it },
+                        modifier      = Modifier.weight(1f),
+                        enabled       = canSend,
+                        placeholder   = {
+                            Text(
+                                if (canSend) "Написать..." else "Нет сети — отправка недоступна",
+                                color = NexoryColors.TextSecondary,
+                            )
+                        },
+                        maxLines      = 4,
+                        shape         = RoundedCornerShape(22.dp),
+                        colors        = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor      = NexoryColors.PrimaryBlue,
+                            unfocusedBorderColor    = NexoryColors.SurfaceMid,
+                            focusedContainerColor   = NexoryColors.SurfaceMid,
+                            unfocusedContainerColor = NexoryColors.SurfaceMid,
+                            focusedTextColor        = NexoryColors.TextPrimary,
+                            unfocusedTextColor      = NexoryColors.TextPrimary,
+                            disabledContainerColor  = NexoryColors.SurfaceMid,
+                            disabledTextColor       = NexoryColors.TextSecondary,
+                        ),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    // Кнопка отправки
+                    IconButton(
+                        onClick = {
+                            val text = inputText.trim()
+                            if (text.isNotEmpty()) {
+                                viewModel.sendMessage(chatId, text)
+                                inputText = ""
+                            }
+                        },
+                        enabled = canSend,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(
+                                if (canSend) Brush.linearGradient(
+                                    listOf(NexoryColors.GradientStart, NexoryColors.GradientEnd)
+                                ) else Brush.linearGradient(
+                                    listOf(NexoryColors.SurfaceMid, NexoryColors.SurfaceMid)
+                                ),
+                                CircleShape
+                            ),
+                    ) {
+                        Icon(
+                            Icons.Default.Send, null,
+                            tint = if (canSend) Color.White else NexoryColors.TextSecondary,
+                        )
+                    }
                 }
             }
         }

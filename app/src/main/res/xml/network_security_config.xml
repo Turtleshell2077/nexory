@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Политика сетевой безопасности.
+
+  По умолчанию открытый (нешифрованный) HTTP-трафик ЗАПРЕЩЁН для всего приложения.
+  Исключение сделано только для конкретного адреса нашего бэкенда, пока он не переведён
+  на HTTPS. Это принципиально лучше, чем android:usesCleartextTraffic="true", который
+  разрешал открытый трафик куда угодно: такой флаг — повод для замечаний при модерации
+  и реальный риск перехвата данных.
+
+  ⚠️ ПЕРЕД РЕЛИЗОМ В GOOGLE PLAY:
+  1) Выпустить сертификат (Let's Encrypt) и поднять домен для API.
+  2) Поменять схему в NexoryConfig.SERVER_ORIGIN на https.
+  3) Удалить блок <domain-config> ниже целиком — тогда всё приложение будет работать
+     только по HTTPS, что и требуется заявить в разделе Data Safety.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Временное исключение для текущего бэкенда без TLS -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">186.246.12.170</domain>
+    </domain-config>
+</network-security-config>

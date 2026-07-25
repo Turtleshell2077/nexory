@@ -65,16 +65,28 @@ sealed class Screen(val route: String) {
     }
     object Onboarding : Screen("onboarding")
     object VerifyEmail : Screen("verify_email")
+    /** Согласие с политикой конфиденциальности — обязательно ДО входа/регистрации (RuStore). */
+    object Consent : Screen("consent")
 }
+
+// Экраны, доступные неавторизованному пользователю. Используется в редиректах ниже,
+// чтобы не выкидывать пользователя с экрана согласия или онбординга на Login.
+private val PUBLIC_ROUTES = setOf(
+    Screen.Login.route,
+    Screen.Register.route,
+    Screen.Onboarding.route,
+    Screen.Consent.route,
+)
 
 @Composable
 fun AppNavHost(
     navController: NavHostController,
     isLoggedIn: Boolean?,
     onboardingDone: Boolean? = true,
+    legalAccepted: Boolean? = true,
 ) {
     // null = DataStore ещё загружается — показываем тёмный экран без мигания
-    if (isLoggedIn == null || onboardingDone == null) {
+    if (isLoggedIn == null || onboardingDone == null || legalAccepted == null) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -88,10 +100,12 @@ fun AppNavHost(
 
     NavHost(
         navController    = navController,
-        // Стартовый экран: залогинен → лента; новый пользователь → онбординг; иначе → вход
+        // Стартовый экран: залогинен → лента; новый пользователь → онбординг;
+        // не принял документы → согласие (требование RuStore); иначе → вход
         startDestination = when {
             isLoggedIn        -> Screen.Feed.route
             !onboardingDone   -> Screen.Onboarding.route
+            !legalAccepted    -> Screen.Consent.route
             else              -> Screen.Login.route
         },
         // Плавные переходы вместо резкой смены (без чёрных вспышек)
@@ -104,6 +118,11 @@ fun AppNavHost(
         // ---- Onboarding ----
         composable(Screen.Onboarding.route) {
             com.nexory.app.ui.screens.onboarding.OnboardingScreen(navController = navController)
+        }
+
+        // ---- Согласие с документами (до входа/регистрации) ----
+        composable(Screen.Consent.route) {
+            com.nexory.app.ui.screens.legal.ConsentScreen(navController = navController)
         }
 
         // ---- Auth ----
@@ -204,14 +223,17 @@ fun AppNavHost(
     // - Нажатие Back на Feed завершает Activity т.к. стек пуст — это правильно
     LaunchedEffect(isLoggedIn) {
         val currentRoute = navController.currentDestination?.route
+        val onPublicScreen = currentRoute == null || currentRoute in PUBLIC_ROUTES
         when {
-            isLoggedIn && currentRoute in setOf(Screen.Login.route, Screen.Register.route, Screen.Onboarding.route, null) -> {
+            isLoggedIn && onPublicScreen -> {
                 navController.navigate(Screen.Feed.route) {
                     popUpTo(0) { inclusive = true }
                 }
             }
-            !isLoggedIn && currentRoute !in setOf(Screen.Login.route, Screen.Register.route, Screen.Onboarding.route, null) -> {
-                navController.navigate(Screen.Login.route) {
+            // При выходе ведём на согласие, если оно ещё не дано, иначе на вход
+            !isLoggedIn && !onPublicScreen -> {
+                val target = if (legalAccepted) Screen.Login.route else Screen.Consent.route
+                navController.navigate(target) {
                     popUpTo(0) { inclusive = true }
                 }
             }

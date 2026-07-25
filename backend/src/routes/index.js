@@ -70,6 +70,8 @@ router.get('/users/search',    authenticate, v.users.search, validate, usersCtrl
 router.get('/users/me',        authenticate, usersCtrl.getProfile);
 router.put('/users/me',        authenticate, v.users.update, validate, usersCtrl.updateProfile);
 router.put('/users/me/password',   authenticate, v.users.changePassword, validate, usersCtrl.changePassword);
+// Удаление аккаунта и всех данных — обязательное требование Google Play
+router.delete('/users/me',         authenticate, v.users.deleteAccount, validate, usersCtrl.deleteAccount);
 router.put('/users/me/fcm-token',  authenticate, usersCtrl.updateFcmToken);
 router.get('/users/me/allowed',    authenticate, usersCtrl.getAllowed);
 router.put('/users/me/allowed',    authenticate, usersCtrl.setAllowed);

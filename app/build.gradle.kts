@@ -18,11 +18,13 @@ android {
         versionCode   = 1
         versionName   = "1.0.0"
 
-        // Базовый URL задаётся здесь, не хардкодится в коде
-        buildConfigField("String", "API_BASE_URL",
-            "\"https://api.nexory.app/api/v1/\"")
-        buildConfigField("String", "WS_BASE_URL",
-            "\"wss://api.nexory.app/ws\"")
+        // Адрес бэкенда — единственное место, где он задаётся.
+        // Остальные адреса (REST, WebSocket, юр. документы) выводятся из него
+        // в NexoryConfig. Раньше здесь стоял неиспользуемый api.nexory.app,
+        // а реальный адрес был захардкожен в коде — источники разъезжались.
+        //
+        // ⚠️ ПЕРЕД РЕЛИЗОМ В GOOGLE PLAY заменить на https://<домен>
+        buildConfigField("String", "SERVER_ORIGIN", "\"http://186.246.12.170:3000\"")
     }
 
     buildFeatures {
@@ -68,6 +70,11 @@ dependencies {
 
     // ---- DataStore (хранение токенов) ----
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // ---- Room (локальный кэш для оффлайн-режима) ----
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     // ---- Coil (загрузка изображений) ----
     implementation("io.coil-kt:coil-compose:2.7.0")

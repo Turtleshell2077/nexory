@@ -30,6 +30,18 @@ class SettingsManager @Inject constructor(
         private val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         private val KEY_ONBOARDING    = booleanPreferencesKey("onboarding_done")
         private val KEY_PIN_HASH      = stringPreferencesKey("pin_hash")
+        private val KEY_LEGAL_ACCEPTED = booleanPreferencesKey("legal_accepted")
+    }
+
+    // ---- Согласие с политикой конфиденциальности ----
+    // Требование модерации RuStore: пользователь должен ознакомиться с политикой
+    // ДО авторизации и регистрации. Пока флаг false — показываем экран согласия.
+    val legalAccepted: Flow<Boolean> = context.settingsStore.data.map { prefs ->
+        prefs[KEY_LEGAL_ACCEPTED] ?: false
+    }
+
+    suspend fun setLegalAccepted() {
+        context.settingsStore.edit { it[KEY_LEGAL_ACCEPTED] = true }
     }
 
     val onboardingDone: Flow<Boolean> = context.settingsStore.data.map { prefs ->

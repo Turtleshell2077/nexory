@@ -20,10 +20,8 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    // Базовый URL — в реальном проекте берём из BuildConfig
-    // BuildConfig.API_BASE_URL задаётся в build.gradle:
-    //   buildConfigField "String", "API_BASE_URL", '"https://api.nexory.app/api/v1/"'
-    private const val BASE_URL = "http://186.246.12.170:3000/api/v1/"
+    // Единый источник адреса сервера — NexoryConfig (см. комментарий про HTTPS перед релизом)
+    private val BASE_URL = com.nexory.app.NexoryConfig.API_BASE_URL
 
     // Gson с настройками:
     // lenient — не падает на некоторые нестандартные JSON
@@ -55,8 +53,14 @@ object AppModule {
     @Provides @Singleton
     fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
-            // В релизе отключить! Логи раскрывают токены
-            level = HttpLoggingInterceptor.Level.BODY
+            // В release полностью выключаем: уровень BODY пишет в logcat токены
+            // авторизации и содержимое личных сообщений — это утечка и повод
+            // для замечаний при проверке безопасности.
+            level = if (com.nexory.app.BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor) // добавляет Authorization header

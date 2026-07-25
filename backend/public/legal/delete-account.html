@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Удаление аккаунта — Nexory</title>
+<style>
+  :root { color-scheme: light dark; --bg:#ffffff; --fg:#14161a; --muted:#5b6472; --line:#e3e6ea; --accent:#2f6bff; --danger:#d92d20; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --fg:#e8eaed; --muted:#9aa3b2; --line:#242832; --accent:#5b8cff; --danger:#ff6b60; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px 18px 64px; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+         max-width:720px; margin-inline:auto; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  h2 { font-size:18px; margin:28px 0 10px; padding-top:14px; border-top:1px solid var(--line); }
+  ol, ul { padding-left:22px; } li { margin:8px 0; }
+  .steps { background:color-mix(in srgb, var(--accent) 10%, transparent);
+           border-left:3px solid var(--accent); padding:14px 16px; border-radius:8px; margin:18px 0; }
+  .danger { background:color-mix(in srgb, var(--danger) 10%, transparent);
+            border-left:3px solid var(--danger); padding:14px 16px; border-radius:8px; margin:18px 0; }
+  a { color:var(--accent); }
+  code { background:var(--line); padding:1px 5px; border-radius:4px; }
+  .path { font-weight:600; }
+</style>
+</head>
+<body>
+
+<h1>Удаление аккаунта Nexory</h1>
+<p>На этой странице описано, как удалить учётную запись Nexory и все связанные с ней данные.</p>
+
+<h2>Способ 1: в приложении (рекомендуется)</h2>
+<div class="steps">
+  <ol>
+    <li>Откройте приложение Nexory.</li>
+    <li>Перейдите на вкладку <span class="path">Профиль</span>.</li>
+    <li>Откройте <span class="path">Настройки</span>.</li>
+    <li>В разделе <span class="path">Аккаунт</span> нажмите <span class="path">Удалить аккаунт</span>.</li>
+    <li>Введите пароль для подтверждения и нажмите <span class="path">Удалить навсегда</span>.</li>
+  </ol>
+</div>
+<p>Аккаунт удаляется сразу, обращение в поддержку не требуется.</p>
+
+<h2>Способ 2: если доступ к аккаунту утрачен</h2>
+<p>Если вы не можете войти в приложение, отправьте запрос на удаление на адрес
+<strong><a href="mailto:turtleshell2077@gmail.com">turtleshell2077@gmail.com</a></strong>
+с адреса электронной почты, указанного при регистрации.
+В письме укажите ваш никнейм в Nexory.</p>
+<p>Мы обработаем запрос в течение 30 дней и подтвердим удаление ответным письмом.</p>
+
+<h2>Какие данные удаляются</h2>
+<p>Удаляются безвозвратно:</p>
+<ul>
+  <li>профиль: никнейм, имя, email, телефон, возраст, город, «о себе», увлечения;</li>
+  <li>фотография профиля;</li>
+  <li>созданные вами мероприятия;</li>
+  <li>ваши сообщения в чатах;</li>
+  <li>список друзей и заявки в друзья;</li>
+  <li>настройки приложения и приватности;</li>
+  <li>токены сессий и токен push-уведомлений.</li>
+</ul>
+
+<div class="danger">
+  <strong>Удаление необратимо.</strong> Восстановить аккаунт и его содержимое после
+  удаления невозможно. Если вы хотите просто перестать получать уведомления,
+  отключите их в настройках приложения — удалять аккаунт для этого не нужно.
+</div>
+
+<h2>Сроки хранения после удаления</h2>
+<p>Данные удаляются из базы немедленно. Отдельные записи в технических журналах сервера
+(например, IP-адрес обращения) могут храниться до 90 дней в целях безопасности,
+после чего удаляются автоматически.</p>
+
+<h2>Подробнее</h2>
+<p>Полное описание обработки данных — в <a href="/legal/privacy">Политике конфиденциальности</a>.
+Правила использования сервиса — в <a href="/legal/terms">Пользовательском соглашении</a>.</p>
+
+</body>
+</html>

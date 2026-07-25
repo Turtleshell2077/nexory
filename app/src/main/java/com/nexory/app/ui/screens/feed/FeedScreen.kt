@@ -247,6 +247,12 @@ fun FeedScreen(
             }
         }
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Нет сети — честно говорим, что данные сохранённые, и когда обновлялись
+            com.nexory.app.ui.components.OfflineBanner(
+                visible = uiState.isOffline || uiState.isFromCache,
+                cachedAt = uiState.cachedAt,
+            )
+
             // Строка поиска + кнопка фильтров (фильтр — только на вкладке «Все»)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(end = 12.dp),

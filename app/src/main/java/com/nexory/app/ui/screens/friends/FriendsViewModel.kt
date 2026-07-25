@@ -19,11 +19,17 @@ data class FriendsUiState(
     val requests:      List<FriendDto> = emptyList(),
     val searchResults: List<FriendDto> = emptyList(),
     val searchQuery:   String          = "",
-    val tab:           Int             = 0,  // 0=друзья, 1=запросы, 2=поиск
+    val tab:           Int             = 0,  // 0=друзья, 1=запросы
     val isLoading:     Boolean         = false,
+    val isSearching:   Boolean         = false, // идёт запрос поиска
+    val searchOpen:    Boolean         = false, // раскрыта ли инлайн-строка поиска
     val sentRequests:  Set<String>     = emptySet(),  // кому уже отправили заявку
     val myUserId:      String?         = null,
-)
+) {
+    /** Ник введён, но никого не нашли — показываем «не найдено». */
+    val searchEmpty: Boolean
+        get() = searchOpen && !isSearching && searchQuery.trim().length >= 2 && searchResults.isEmpty()
+}
 
 @HiltViewModel
 class FriendsViewModel @Inject constructor(
@@ -55,24 +61,39 @@ class FriendsViewModel @Inject constructor(
     private var searchJob: Job? = null
 
     fun search(query: String) {
+        // Ник вводят без «@», но если пользователь его напечатал — не мешаем
         _state.update { it.copy(searchQuery = query) }
         searchJob?.cancel()
 
-        val trimmed = query.trim()
+        val trimmed = query.trim().removePrefix("@")
         if (trimmed.length < 2) {
-            _state.update { it.copy(searchResults = emptyList()) }
+            _state.update { it.copy(searchResults = emptyList(), isSearching = false) }
             return
         }
 
         // Дебаунс + отмена предыдущего запроса — устраняет гонки и мигание результатов
         searchJob = viewModelScope.launch {
+            _state.update { it.copy(isSearching = true) }
             delay(300)
             try {
                 val results = api.searchUsers(trimmed)["users"] ?: emptyList()
-                _state.update { it.copy(searchResults = results) }
+                _state.update { it.copy(searchResults = results, isSearching = false) }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) return@launch
-                _state.update { it.copy(searchResults = emptyList()) }
+                _state.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            }
+        }
+    }
+
+    /** Раскрыть/свернуть инлайн-строку поиска на вкладке «Друзья». */
+    fun toggleSearch() {
+        _state.update {
+            if (it.searchOpen) {
+                // Закрываем — сбрасываем запрос и результаты
+                searchJob?.cancel()
+                it.copy(searchOpen = false, searchQuery = "", searchResults = emptyList(), isSearching = false)
+            } else {
+                it.copy(searchOpen = true)
             }
         }
     }

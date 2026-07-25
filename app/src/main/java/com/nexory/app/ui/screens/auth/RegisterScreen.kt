@@ -23,6 +23,7 @@ import androidx.navigation.NavController
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.theme.NexoryColors
 import com.nexory.app.ui.components.nexoryTextFieldColors
+import com.nexory.app.ui.components.LegalFooter
 
 @Composable
 fun RegisterScreen(
@@ -165,6 +166,14 @@ fun RegisterScreen(
                         Text("Создать аккаунт", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color.White)
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Ссылки на политику конфиденциальности и соглашение на экране регистрации —
+            // требование модерации RuStore (доступ до создания аккаунта).
+            LegalFooter()
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

@@ -28,9 +28,9 @@ class ChatWebSocketManager @Inject constructor(
     private val gson: Gson,
 ) {
     companion object {
-        // WebSocket-адрес должен указывать на тот же backend, что и REST (AppModule.BASE_URL).
-        // Для локального dev-сервера это ws:// на тот же хост и порт.
-        private const val WS_BASE_URL = "ws://186.246.12.170:3000/ws"
+        // Адрес выводится из того же NexoryConfig.SERVER_ORIGIN, что и REST —
+        // не разъедется при смене хоста/схемы.
+        private val WS_BASE_URL = com.nexory.app.NexoryConfig.WS_URL
         private const val MAX_RETRIES = 5
     }
 

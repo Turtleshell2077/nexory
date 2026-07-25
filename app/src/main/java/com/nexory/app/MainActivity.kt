@@ -57,6 +57,11 @@ class MainActivity : ComponentActivity() {
                         settingsManager.onboardingDone.map { it as Boolean? }
                     }.collectAsState(initial = null)
 
+                    // Принял ли пользователь политику конфиденциальности (требование RuStore)
+                    val legalAccepted: Boolean? by remember {
+                        settingsManager.legalAccepted.map { it as Boolean? }
+                    }.collectAsState(initial = null)
+
                     // PIN-код: если включён и пользователь залогинен — блокируем вход
                     // до правильного PIN. rememberSaveable → поворот экрана не сбрасывает разблокировку.
                     val pinEnabled by settingsManager.pinEnabled.collectAsState(initial = false)
@@ -75,6 +80,7 @@ class MainActivity : ComponentActivity() {
                             navController  = navController,
                             isLoggedIn     = isLoggedIn,
                             onboardingDone = onboardingDone,
+                            legalAccepted  = legalAccepted,
                         )
                     }
                 }

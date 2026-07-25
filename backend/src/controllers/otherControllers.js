@@ -170,6 +170,21 @@ const updateProfile = async (req, res) => {
     const boolOrNull = (v) => v !== undefined ? String(v) : null;
 
     try {
+        // Смена ника: проверяем занятость без учёта регистра (кроме самого себя).
+        // Без этой проверки уникальный индекс отдал бы «сырую» ошибку 500.
+        if (username) {
+            const taken = await query(
+                'SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id <> $2 LIMIT 1',
+                [username, userId]
+            );
+            if (taken.rows.length > 0) {
+                return res.status(409).json({
+                    error: 'Такой никнейм уже занят — выберите другой',
+                    details: [{ field: 'username', msg: 'Никнейм занят' }],
+                });
+            }
+        }
+
         const result = await query(`
             UPDATE users SET
                 username               = COALESCE($1,  username),
@@ -239,6 +254,64 @@ const changePassword = async (req, res) => {
     res.json({ message: 'Password changed. Please login again.' });
 };
 
+// DELETE /users/me — полное удаление аккаунта и всех связанных данных.
+//
+// Обязательное требование Google Play: пользователь должен иметь возможность удалить
+// аккаунт из самого приложения, без обращения в поддержку.
+//
+// Подтверждаем паролём: действие необратимо, и мы не хотим, чтобы аккаунт можно было
+// снести с чужого разблокированного телефона.
+//
+// Все таблицы, ссылающиеся на users(id), объявлены с ON DELETE CASCADE, поэтому одна
+// операция DELETE удаляет профиль, мероприятия пользователя, его сообщения, участия,
+// дружбы и заявки, настройки видимости, обращения в поддержку, жалобы и токены сессий.
+const deleteAccount = async (req, res) => {
+    const userId = req.user.id;
+    const { password } = req.body;
+
+    try {
+        const userRes = await query(
+            'SELECT password_hash, avatar_url FROM users WHERE id = $1',
+            [userId]
+        );
+        if (userRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+
+        const valid = await bcrypt.compare(password, userRes.rows[0].password_hash);
+        if (!valid) {
+            return res.status(401).json({ error: 'Неверный пароль' });
+        }
+
+        const avatarUrl = userRes.rows[0].avatar_url;
+
+        // Каскадное удаление всех данных пользователя
+        await query('DELETE FROM users WHERE id = $1', [userId]);
+
+        // Best-effort: удаляем файл аватара с диска, чтобы не оставлять «сирот».
+        // Ошибки игнорируем — аккаунт уже удалён, это не повод отдавать 500.
+        if (avatarUrl) {
+            try {
+                const fs   = require('fs');
+                const path = require('path');
+                const fileName = path.basename(new URL(avatarUrl, 'http://local').pathname);
+                if (fileName && !fileName.includes('..')) {
+                    const filePath = path.join(__dirname, '../../uploads', fileName);
+                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                }
+            } catch (e) {
+                console.warn('[deleteAccount] не удалось удалить файл аватара:', e.message);
+            }
+        }
+
+        console.log(`[deleteAccount] аккаунт ${userId} удалён по запросу пользователя`);
+        res.json({ message: 'Аккаунт и все данные удалены' });
+    } catch (err) {
+        console.error('[deleteAccount]', err);
+        res.status(500).json({ error: 'Не удалось удалить аккаунт' });
+    }
+};
+
 const updateFcmToken = async (req, res) => {
     const userId = req.user.id;
     const { fcmToken } = req.body;
@@ -246,8 +319,16 @@ const updateFcmToken = async (req, res) => {
     res.json({ message: 'FCM token updated' });
 };
 
+// GET /users/search?q= — поиск людей ТОЛЬКО по никнейму.
+//
+// Раньше искали ещё по display_name и phone. От этого отказались осознанно:
+//  - ник уникален, а имена — нет: по имени приходил список одинаковых «Саша»,
+//    и было непонятно, кого добавляешь;
+//  - поиск по номеру телефона позволял находить людей по их приватному контакту,
+//    что для соцприложения нежелательно.
+// В ответе имя по-прежнему отдаём — оно нужно для превью найденного профиля.
 const searchUsers = async (req, res) => {
-    // Разрешаем писать ник с "@" — убираем его перед поиском по username
+    // Разрешаем писать ник с "@" — убираем его перед поиском
     const q = (req.query.q || '').replace(/^@+/, '').trim();
     if (!q || q.length < 2) return res.json({ users: [] });
 
@@ -255,9 +336,18 @@ const searchUsers = async (req, res) => {
         const result = await query(`
             SELECT id, username, avatar_url, bio, display_name, city, country
             FROM users
-            WHERE username ILIKE $1 OR display_name ILIKE $1 OR phone ILIKE $1
+            WHERE LOWER(username) LIKE LOWER($1)
+            ORDER BY
+                -- сначала точное совпадение, затем начинающиеся с запроса, потом остальные
+                CASE
+                    WHEN LOWER(username) = LOWER($2) THEN 0
+                    WHEN LOWER(username) LIKE LOWER($2) || '%' THEN 1
+                    ELSE 2
+                END,
+                LENGTH(username),
+                username
             LIMIT 20
-        `, [`%${q}%`]);
+        `, [`%${q}%`, q]);
 
         res.json({ users: result.rows });
     } catch (err) {
@@ -298,7 +388,7 @@ const setAllowed = async (req, res) => {
     }
 };
 
-module.exports.users = { getProfile, updateProfile, changePassword, updateFcmToken, searchUsers, getAllowed, setAllowed };
+module.exports.users = { getProfile, updateProfile, changePassword, updateFcmToken, searchUsers, getAllowed, setAllowed, deleteAccount };
 
 
 // -------------------------------------------------------
