@@ -38,6 +38,10 @@ class EditProfileViewModel @Inject constructor(
     // Загружает фото на сервер, возвращает постоянный URL
     suspend fun uploadImage(uri: Uri): String? = uploader.upload(uri)
 
+    /** Вариант с конкретной причиной сбоя — чтобы показать её пользователю. */
+    suspend fun uploadImageWithResult(uri: Uri): com.nexory.app.data.network.UploadResult =
+        uploader.uploadWithResult(uri)
+
     private val _state = MutableStateFlow(EditProfileUiState())
     val state = _state.asStateFlow()
 
@@ -72,7 +76,10 @@ class EditProfileViewModel @Inject constructor(
                     if (username.isNotBlank())    put("username",     username)
                     if (displayName.isNotBlank()) put("display_name", displayName)
                     put("bio",        bio)            // допускаем очистку
-                    if (avatarUrl.isNotBlank())   put("avatar_url",   avatarUrl)
+                    // Отправляем всегда, включая пустую строку: она означает
+                    // «удалить фото». Раньше пустое значение отсекалось, и убрать
+                    // аватар через редактирование профиля было невозможно.
+                    put("avatar_url", avatarUrl)
                     if (age != null)              put("age",          age.toString())
                     put("city",       city)
                     put("sports",     interests)

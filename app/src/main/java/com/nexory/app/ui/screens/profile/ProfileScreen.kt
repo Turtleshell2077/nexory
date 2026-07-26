@@ -50,35 +50,7 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showAvatarFull by remember { mutableStateOf(false) }   // круг (тап)
-    var showRemoveAvatarDialog by remember { mutableStateOf(false) }
-
-    // Подтверждение удаления фото профиля
-    if (showRemoveAvatarDialog) {
-        AlertDialog(
-            onDismissRequest = { showRemoveAvatarDialog = false },
-            containerColor = NexoryColors.SurfaceDark,
-            shape = RoundedCornerShape(20.dp),
-            icon = { Icon(Icons.Default.DeleteOutline, null, tint = NexoryColors.Error, modifier = Modifier.size(32.dp)) },
-            title = { Text("Удалить фото профиля?", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "Фотография будет удалена. Вместо неё другие пользователи увидят " +
-                        "ваш цветной аватар с инициалами. Загрузить новое фото можно в любой момент.",
-                    color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showRemoveAvatarDialog = false; viewModel.removeAvatar() }) {
-                    Text("Удалить", color = NexoryColors.Error, fontWeight = FontWeight.SemiBold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRemoveAvatarDialog = false }) {
-                    Text("Отмена", color = NexoryColors.TextSecondary)
-                }
-            },
-        )
-    }
+    var showAvatarPicker by remember { mutableStateOf(false) }
     var showAvatarRect by remember { mutableStateOf(false) }   // прямоугольник (потянуть вниз)
 
     val cropAvatar = com.nexory.app.ui.components.rememberImageCropper(circle = true) { cropped ->
@@ -87,6 +59,19 @@ fun ProfileScreen(
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { cropAvatar(it) } }
+
+    // Все действия с аватаром — в одном листе: галерея, готовые варианты, удаление.
+    // Объявлен после avatarPicker, т.к. ссылается на него.
+    if (showAvatarPicker) {
+        com.nexory.app.ui.components.AvatarPickerSheet(
+            currentUrl = uiState.user?.avatarUrl,
+            userName = uiState.user?.displayName?.takeIf { it.isNotBlank() } ?: uiState.user?.username,
+            onPickPhoto = { avatarPicker.launch("image/*") },
+            onPickPreset = { viewModel.setAvatarPreset(it) },
+            onRemove = { viewModel.removeAvatar() },
+            onDismiss = { showAvatarPicker = false },
+        )
+    }
 
     // Обновляем профиль при возвращении на экран (после редактирования)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -149,35 +134,25 @@ fun ProfileScreen(
                                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                             }
                         }
-                        // Синий кружок — сменить аватар
+                        // Синий кружок — открыть выбор аватара
+                        // (галерея / готовые варианты / удалить фото)
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
                                 .background(NexoryColors.PrimaryBlue, CircleShape)
-                                .clickable { avatarPicker.launch("image/*") },
+                                .clickable { showAvatarPicker = true },
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(13.dp))
                         }
                     }
-                    // Явная кнопка удаления фото — только когда фото есть.
-                    // После удаления пользователь возвращается к генеративному аватару.
-                    if (!uiState.user?.avatarUrl.isNullOrBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        TextButton(
-                            onClick = { showRemoveAvatarDialog = true },
-                            enabled = !uiState.uploadingAvatar,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        ) {
-                            Icon(Icons.Default.DeleteOutline, null, tint = NexoryColors.Error, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(5.dp))
-                            Text("Удалить фото", color = NexoryColors.Error, fontSize = 13.sp)
-                        }
-                    }
+                    // Кнопки «Удалить фото» здесь больше нет — она загромождала экран.
+                    // Все действия с аватаром собраны в AvatarPickerSheet, который
+                    // открывается нажатием на синий кружок у аватара.
 
-                    // Ошибка загрузки/удаления фото — раньше сбой был молчаливым
+                    // Ошибку загрузки/удаления всё же показываем: раньше сбой был молчаливым
                     uiState.error?.let { err ->
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             err,
                             color = NexoryColors.Error,

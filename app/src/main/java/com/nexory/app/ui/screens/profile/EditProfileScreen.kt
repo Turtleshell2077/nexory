@@ -75,6 +75,7 @@ fun EditProfileScreen(
     var previewUri  by remember { mutableStateOf<Uri?>(null) }
     var uploadingAvatar by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
+    var avatarError by remember { mutableStateOf<String?>(null) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showInterestsInfo by remember { mutableStateOf(false) }
 
@@ -98,12 +99,24 @@ fun EditProfileScreen(
     }
     val scope = rememberCoroutineScope()
 
-    // Кадрирование (круглое) → загрузка
+    // Кадрирование (круглое) → загрузка.
+    // Ошибку обязательно показываем: раньше при неудачной загрузке avatarUrl молча
+    // оставался прежним, сохранялся старый URL — и выглядело так, будто фото
+    // «не меняется» без каких-либо объяснений.
     val cropAvatar = com.nexory.app.ui.components.rememberImageCropper(circle = true) { cropped ->
         previewUri = cropped
         scope.launch {
             uploadingAvatar = true
-            viewModel.uploadImage(cropped)?.let { url -> avatarUrl = url }
+            avatarError = null
+            when (val result = viewModel.uploadImageWithResult(cropped)) {
+                is com.nexory.app.data.network.UploadResult.Success -> {
+                    avatarUrl = result.url
+                }
+                is com.nexory.app.data.network.UploadResult.Failure -> {
+                    previewUri = null          // убираем превью, которое не загрузилось
+                    avatarError = result.message
+                }
+            }
             uploadingAvatar = false
         }
     }
@@ -156,16 +169,28 @@ fun EditProfileScreen(
             // ---- Аватар ----
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(contentAlignment = Alignment.BottomEnd) {
-                    AsyncImage(
-                        model              = previewUri ?: avatarUrl.ifBlank { null },
-                        contentDescription = "Аватар",
-                        contentScale       = ContentScale.Crop,
-                        modifier           = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .background(NexoryColors.SurfaceMid)
-                            .clickable { showAvatarDialog = true },
-                    )
+                    // Пока фото загружается — показываем локальное превью,
+                    // иначе UserAvatar (он умеет и фото, и пресеты, и заглушку с инициалами)
+                    if (previewUri != null) {
+                        AsyncImage(
+                            model              = previewUri,
+                            contentDescription = "Аватар",
+                            contentScale       = ContentScale.Crop,
+                            modifier           = Modifier
+                                .size(100.dp)
+                                .clip(CircleShape)
+                                .background(NexoryColors.SurfaceMid)
+                                .clickable { showAvatarDialog = true },
+                        )
+                    } else {
+                        com.nexory.app.ui.components.UserAvatar(
+                            url  = avatarUrl.ifBlank { null },
+                            name = displayName.ifBlank { username },
+                            seed = state.user?.id,
+                            size = 100.dp,
+                            modifier = Modifier.clickable { showAvatarDialog = true },
+                        )
+                    }
                     if (uploadingAvatar) {
                         Box(
                             modifier = Modifier.size(100.dp).clip(CircleShape).background(Color.Black.copy(0.4f)),
@@ -185,6 +210,29 @@ fun EditProfileScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            // Ошибка загрузки фото — конкретная причина вместо молчаливого «ничего не произошло»
+            avatarError?.let { err ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(NexoryColors.Error.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Icon(Icons.Default.ErrorOutline, null, tint = NexoryColors.Error, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(err, color = NexoryColors.Error, fontSize = 12.sp, lineHeight = 17.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Выбрать другое фото",
+                            color = NexoryColors.PrimaryBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { avatarError = null; imagePicker.launch("image/*") },
+                        )
                     }
                 }
             }
@@ -352,44 +400,26 @@ fun EditProfileScreen(
         )
     }
 
-    // Диалог выбора аватара
+    // Выбор аватара: галерея, готовые варианты оформления, удаление.
+    // Раньше здесь был диалог с полем «вставь URL» — для обычного пользователя
+    // это бессмысленно, а удалить фото было нельзя вовсе.
     if (showAvatarDialog) {
-        AlertDialog(
-            onDismissRequest = { showAvatarDialog = false },
-            containerColor   = NexoryColors.SurfaceDark,
-            shape            = RoundedCornerShape(20.dp),
-            title  = { Text("Аватар", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
-            text   = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(NexoryColors.SurfaceMid)
-                            .clickable { imagePicker.launch("image/*"); showAvatarDialog = false }
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Default.PhotoLibrary, null, tint = NexoryColors.PrimaryBlue)
-                        Spacer(Modifier.width(12.dp))
-                        Text("Выбрать из галереи", color = NexoryColors.TextPrimary)
-                    }
-                    OutlinedTextField(
-                        value         = avatarUrl,
-                        onValueChange = { avatarUrl = it; previewUri = null },
-                        modifier      = Modifier.fillMaxWidth(),
-                        placeholder   = { Text("или вставь URL", color = NexoryColors.TextSecondary) },
-                        singleLine    = true,
-                        shape         = RoundedCornerShape(10.dp),
-                        colors        = nexoryTextFieldColors(),
-                    )
-                }
+        com.nexory.app.ui.components.AvatarPickerSheet(
+            currentUrl = avatarUrl.ifBlank { null },
+            userName = displayName.ifBlank { username },
+            onPickPhoto = { imagePicker.launch("image/*") },
+            onPickPreset = { preset ->
+                previewUri = null
+                avatarUrl = preset
+                avatarError = null
             },
-            confirmButton = {
-                TextButton(onClick = { showAvatarDialog = false }) {
-                    Text("Готово", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold)
-                }
+            onRemove = {
+                previewUri = null
+                // Пустая строка = «удалить» для бэкенда (null означал бы «не менять»)
+                avatarUrl = ""
+                avatarError = null
             },
+            onDismiss = { showAvatarDialog = false },
         )
     }
 }

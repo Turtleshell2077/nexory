@@ -80,6 +80,21 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /** Выбрать готовый вариант оформления аватара (строка вида `preset:3`). */
+    fun setAvatarPreset(presetUrl: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadingAvatar = true, error = null) }
+            try {
+                val response = api.updateProfile(mapOf("avatar_url" to presetUrl))
+                response.user?.let { cache.saveMyProfile(it) }
+                _uiState.update { it.copy(user = response.user) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = com.nexory.app.data.network.ApiError.message(e)) }
+            }
+            _uiState.update { it.copy(uploadingAvatar = false) }
+        }
+    }
+
     fun clearError() { _uiState.update { it.copy(error = null) } }
 
     fun loadProfile() {

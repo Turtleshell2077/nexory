@@ -3,6 +3,8 @@ package com.nexory.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -103,35 +105,14 @@ fun EmptyState(icon: ImageVector, text: String) {
 // аватар: уникальный градиент по имени + первая буква. Одинаковый
 // человек всегда получает один и тот же цвет — узнаваемо и не скучно.
 // -------------------------------------------------------
-private val AVATAR_GRADIENTS: List<List<Color>> = listOf(
-    listOf(Color(0xFF6D5DF6), Color(0xFF4A90E2)), // сине-фиолетовый
-    listOf(Color(0xFFEE5A9E), Color(0xFFF7797D)), // розово-коралловый
-    listOf(Color(0xFF11998E), Color(0xFF38EF7D)), // изумрудный
-    listOf(Color(0xFFF7971E), Color(0xFFFFD200)), // золотой
-    listOf(Color(0xFF667EEA), Color(0xFF764BA2)), // индиго
-    listOf(Color(0xFFFF6A88), Color(0xFFFF99AC)), // малиновый
-    listOf(Color(0xFF00C6FB), Color(0xFF005BEA)), // голубой
-    listOf(Color(0xFFF953C6), Color(0xFFB91D73)), // маджента
-    listOf(Color(0xFF43E97B), Color(0xFF38F9D7)), // мятный
-    listOf(Color(0xFFFA709A), Color(0xFFFEE140)), // закатный
-)
+// Палитра вынесена в AvatarPresets — её же показывает экран выбора аватара.
 
-private fun gradientFor(key: String): List<Color> {
-    val h = key.fold(0) { acc, c -> acc * 31 + c.code }
-    val idx = ((h % AVATAR_GRADIENTS.size) + AVATAR_GRADIENTS.size) % AVATAR_GRADIENTS.size
-    return AVATAR_GRADIENTS[idx]
-}
-
-private fun initialsOf(name: String?): String {
-    val n = name?.trim().orEmpty()
-    if (n.isEmpty()) return "?"
-    val parts = n.split(" ", "_").filter { it.isNotBlank() }
-    return when {
-        parts.size >= 2 -> "${parts[0].first().uppercaseChar()}${parts[1].first().uppercaseChar()}"
-        else -> n.first().uppercaseChar().toString()
-    }
-}
-
+/**
+ * Аватар пользователя. Три режима, в порядке приоритета:
+ *  1. обычная ссылка на файл — показываем фотографию;
+ *  2. строка вида `preset:N` — пользователь сам выбрал вариант оформления;
+ *  3. пусто — детерминированный градиент по [seed] (у каждого свой цвет).
+ */
 @Composable
 fun UserAvatar(
     url:      String?,
@@ -140,7 +121,10 @@ fun UserAvatar(
     size:     Dp,
     modifier: Modifier = Modifier,
 ) {
-    if (!url.isNullOrBlank()) {
+    val presetIndex = AvatarPresets.indexOf(url)
+
+    if (!url.isNullOrBlank() && presetIndex == null) {
+        // Настоящая фотография
         AsyncImage(
             model = url,
             contentDescription = null,
@@ -149,10 +133,13 @@ fun UserAvatar(
         )
     } else {
         val key = (seed ?: name ?: "?")
-        // Градиент и инициалы детерминированы по ключу — считаем один раз на ключ,
-        // а не на каждую рекомпозицию (аватары рисуются в длинных списках).
-        val gradient = remember(key) { gradientFor(key) }
-        val initials = remember(name) { initialsOf(name) }
+        // Градиент и инициалы детерминированы — считаем один раз, а не на каждую
+        // рекомпозицию (аватары рисуются в длинных списках).
+        val gradient = remember(key, presetIndex) {
+            if (presetIndex != null) AvatarPresets.gradientAt(presetIndex)
+            else AvatarPresets.gradientForKey(key)
+        }
+        val initials = remember(name) { AvatarPresets.initialsOf(name) }
         Box(
             modifier = modifier
                 .size(size)
@@ -196,10 +183,16 @@ fun MetroAutocompleteField(
         // клавиатуре список, показанный снизу, полностью уходил под неё —
         // выбрать станцию было невозможно. Сверху он всегда остаётся видимым.
         if (showList) {
+            // Высота ограничена и список прокручивается: при 8 подсказках он вырастал
+            // примерно на 350.dp и выталкивал само поле ввода за пределы экрана —
+            // пользователь не видел, что печатает. Теперь видно максимум ~4 строки,
+            // остальные доступны прокруткой.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(NexoryColors.SurfaceMid, RoundedCornerShape(12.dp)),
+                    .heightIn(max = 176.dp)
+                    .background(NexoryColors.SurfaceMid, RoundedCornerShape(12.dp))
+                    .verticalScroll(rememberScrollState()),
             ) {
                 suggestions.forEach { station ->
                     Text(

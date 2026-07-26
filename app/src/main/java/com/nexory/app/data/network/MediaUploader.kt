@@ -68,7 +68,7 @@ class MediaUploader @Inject constructor(
                 "Не удалось прочитать фото. Попробуйте выбрать другое изображение"
             )
         } ?: return@withContext UploadResult.Failure(
-            "Не удалось открыть выбранный файл. Возможно, к нему нет доступа"
+            "Не удалось прочитать изображение. Попробуйте выбрать другое фото"
         )
 
         if (bytes.size > MAX_UPLOAD_BYTES) {
@@ -107,19 +107,26 @@ class MediaUploader @Inject constructor(
     private fun compressImage(uri: Uri): ByteArray? {
         val resolver = context.contentResolver
 
-        // Проход 1: узнаём размеры без выделения памяти под пиксели
+        // Проход 1: узнаём размеры без выделения памяти под пиксели.
+        //
+        // ВНИМАНИЕ: при inJustDecodeBounds = true метод decodeStream ВСЕГДА возвращает
+        // null — это его контракт, размеры он кладёт в options.outWidth/outHeight.
+        // Поэтому проверять на null нужно результат openInputStream, а НЕ результат
+        // декодирования: иначе функция обрывается на любом, даже корректном файле.
+        val boundsStream = resolver.openInputStream(uri) ?: return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: return null
+        boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
-        // Проход 2: декодируем сразу уменьшенным
+        // Проход 2: декодируем сразу уменьшенным.
+        // Здесь inJustDecodeBounds выключен, поэтому null означает реальную ошибку
+        // декодирования (битый или неподдерживаемый файл).
         val options = BitmapFactory.Options().apply {
             inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight)
         }
-        var bitmap = resolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        } ?: return null
+        val pixelStream = resolver.openInputStream(uri) ?: return null
+        var bitmap = pixelStream.use { BitmapFactory.decodeStream(it, null, options) }
+            ?: return null
 
         // Точное уменьшение до целевого размера (inSampleSize даёт только степени двойки)
         bitmap = scaleDown(bitmap)
@@ -134,12 +141,21 @@ class MediaUploader @Inject constructor(
         }
     }
 
+    /**
+     * Во сколько раз уменьшать при декодировании (только степени двойки).
+     *
+     * Считаем по ДЛИННОЙ стороне, потому что именно её мы ограничиваем в [scaleDown].
+     * Прежнее условие «обе стороны больше порога» было слишком осторожным: для снимка
+     * 4000×3000 оно давало sample = 1, и в память поднимался битмап на 48 МБ
+     * (12 Мп × 4 байта) — на слабых устройствах это OutOfMemory ещё до сжатия.
+     * По длинной стороне получается sample = 2 и ~12 МБ при том же итоговом качестве.
+     */
     private fun calculateInSampleSize(width: Int, height: Int): Int {
         var sample = 1
-        var w = width
-        var h = height
-        while (w / 2 >= MAX_DIMENSION && h / 2 >= MAX_DIMENSION) {
-            w /= 2; h /= 2; sample *= 2
+        var maxSide = maxOf(width, height)
+        while (maxSide / 2 >= MAX_DIMENSION) {
+            maxSide /= 2
+            sample *= 2
         }
         return sample
     }
