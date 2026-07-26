@@ -1,4 +1,5 @@
 const { query, transaction } = require('../config/db');
+const { deleteUploadedFile } = require('./uploadController');
 
 // GET /friends
 const getFriends = async (req, res) => {
@@ -170,6 +171,17 @@ const updateProfile = async (req, res) => {
     const boolOrNull = (v) => v !== undefined ? String(v) : null;
 
     try {
+        // Удаление фото профиля.
+        // Пустая строка в avatar_url — это явное «удалить», тогда как null/undefined
+        // означает «не менять» (ниже стоит COALESCE). Без этого различия обнулить
+        // аватар было невозможно: COALESCE(NULL, avatar_url) вернул бы старое значение.
+        if (avatar_url === '') {
+            const cur = await query('SELECT avatar_url FROM users WHERE id = $1', [userId]);
+            const oldUrl = cur.rows[0]?.avatar_url;
+            await query('UPDATE users SET avatar_url = NULL WHERE id = $1', [userId]);
+            if (oldUrl) deleteUploadedFile(oldUrl);
+        }
+
         // Смена ника: проверяем занятость без учёта регистра (кроме самого себя).
         // Без этой проверки уникальный индекс отдал бы «сырую» ошибку 500.
         if (username) {
@@ -289,20 +301,9 @@ const deleteAccount = async (req, res) => {
         await query('DELETE FROM users WHERE id = $1', [userId]);
 
         // Best-effort: удаляем файл аватара с диска, чтобы не оставлять «сирот».
-        // Ошибки игнорируем — аккаунт уже удалён, это не повод отдавать 500.
-        if (avatarUrl) {
-            try {
-                const fs   = require('fs');
-                const path = require('path');
-                const fileName = path.basename(new URL(avatarUrl, 'http://local').pathname);
-                if (fileName && !fileName.includes('..')) {
-                    const filePath = path.join(__dirname, '../../uploads', fileName);
-                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-                }
-            } catch (e) {
-                console.warn('[deleteAccount] не удалось удалить файл аватара:', e.message);
-            }
-        }
+        // Ошибки внутри helper'а не пробрасываются — аккаунт уже удалён,
+        // это не повод отдавать 500.
+        deleteUploadedFile(avatarUrl);
 
         console.log(`[deleteAccount] аккаунт ${userId} удалён по запросу пользователя`);
         res.json({ message: 'Аккаунт и все данные удалены' });

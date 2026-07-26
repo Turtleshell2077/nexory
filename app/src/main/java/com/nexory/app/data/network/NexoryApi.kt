@@ -185,6 +185,11 @@ interface NexoryApi {
     @PUT("users/me/allowed")
     suspend fun setAllowedFriends(@Body body: Map<String, List<String>>): Map<String, Any>
 
+    // ---- Публичная конфигурация клиента ----
+    // Значения, которые должны меняться без релиза в сторе (ссылка на донат).
+    @GET("config")
+    suspend fun getConfig(): AppConfigDto
+
     // ---- Support ----
 
     @POST("support")

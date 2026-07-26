@@ -31,6 +31,17 @@ class SettingsManager @Inject constructor(
         private val KEY_ONBOARDING    = booleanPreferencesKey("onboarding_done")
         private val KEY_PIN_HASH      = stringPreferencesKey("pin_hash")
         private val KEY_LEGAL_ACCEPTED = booleanPreferencesKey("legal_accepted")
+        private val KEY_DONATION_URL   = stringPreferencesKey("donation_url")
+    }
+
+    // ---- Кэш ссылки на приём переводов ----
+    // Ссылка приходит с сервера (GET /config). Сохраняем последнюю известную,
+    // чтобы кнопка доната работала при коротком сбое сети или сервера.
+    suspend fun getDonationUrl(): String? =
+        context.settingsStore.data.first()[KEY_DONATION_URL]
+
+    suspend fun setDonationUrl(url: String) {
+        context.settingsStore.edit { it[KEY_DONATION_URL] = url }
     }
 
     // ---- Согласие с политикой конфиденциальности ----

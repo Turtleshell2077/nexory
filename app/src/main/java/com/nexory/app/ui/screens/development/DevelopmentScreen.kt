@@ -160,6 +160,45 @@ fun DevelopmentScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Пояснение ПЕРЕД переходом: платёж происходит вне приложения и его статус
+    // приложению неизвестен. Пользователь должен понимать это заранее, а не
+    // выяснять постфактум, когда деньги уже ушли.
+    var showPayExplain by remember { mutableStateOf(false) }
+    if (showPayExplain) {
+        AlertDialog(
+            onDismissRequest = { showPayExplain = false },
+            containerColor = NexoryColors.SurfaceDark,
+            shape = RoundedCornerShape(20.dp),
+            icon = { Icon(Icons.Default.OpenInNew, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(32.dp)) },
+            title = { Text("Переход к оплате", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Сейчас откроется защищённая страница банка в браузере. " +
+                            "Сумму вы указываете там же и подтверждаете перевод в своём банке.",
+                        color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Оплата проходит вне Nexory: приложение не получает данных о платеже " +
+                            "и не отслеживает его статус. Проверить перевод можно в истории операций банка.",
+                        color = NexoryColors.TextSecondary, fontSize = 13.sp, lineHeight = 19.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPayExplain = false; viewModel.donate(context) }) {
+                    Text("Продолжить", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPayExplain = false }) {
+                    Text("Отмена", color = NexoryColors.TextSecondary)
+                }
+            },
+        )
+    }
+
     if (donationState is DonationUiState.Returned) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissDonationState() },
@@ -336,7 +375,7 @@ fun DevelopmentScreen(
 
                 val isStarting = donationState is DonationUiState.Starting
                 Button(
-                    onClick = { viewModel.donate(context) },
+                    onClick = { showPayExplain = true },
                     enabled = !isStarting,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(14.dp),

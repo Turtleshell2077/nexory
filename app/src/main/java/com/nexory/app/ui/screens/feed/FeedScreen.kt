@@ -96,7 +96,37 @@ fun FeedScreen(
                 containerColor   = NexoryColors.SurfaceDark,
             ) {
                 Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-                    Text("Фильтры", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = NexoryColors.TextPrimary)
+                    // Заголовок и сброс — в одной строке сверху: сбросить фильтры нужно
+                    // быстро, а не долистывая весь список настроек до низа.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Фильтры",
+                            fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                            color = NexoryColors.TextPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        val hasFilters = uiState.activeFilterCount > 0
+                        TextButton(
+                            onClick = { viewModel.resetFilters() },
+                            enabled = hasFilters,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh, null,
+                                tint = if (hasFilters) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Сбросить",
+                                color = if (hasFilters) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
+                                fontSize = 14.sp,
+                            )
+                        }
+                    }
 
                     Spacer(Modifier.height(16.dp))
                     Text("Сортировка", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
@@ -229,20 +259,13 @@ fun FeedScreen(
                     LocationFilter(value = uiState.location, onChange = viewModel::setLocation)
 
                     Spacer(Modifier.height(20.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(
-                            onClick = { viewModel.resetFilters() },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NexoryColors.TextSecondary),
-                        ) { Text("Сбросить") }
-                        Button(
-                            onClick = { showFilters = false },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = NexoryColors.PrimaryBlue),
-                        ) { Text("Показать") }
-                    }
+                    // «Сбросить» переехал в шапку — здесь остаётся только подтверждение
+                    Button(
+                        onClick = { showFilters = false },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NexoryColors.PrimaryBlue),
+                    ) { Text("Показать результаты", fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
@@ -326,7 +349,13 @@ private fun FeedPage(
 ) {
     val listState = rememberLazyListState()
 
-    // Панель категорий: скрываем при прокрутке вниз, показываем при прокрутке вверх
+    // Панель категорий: скрываем при прокрутке вниз, показываем при прокрутке вверх.
+    //
+    // ВАЖНО про «подскок» в конце списка: панель — сосед LazyColumn внутри Column,
+    // поэтому её показ/скрытие меняет доступную списку высоту. Если список уже
+    // долистан до конца, изменение высоты вынуждает его сдвинуть содержимое —
+    // визуально это и есть «отскок». Поэтому у нижнего края состояние панели
+    // замораживаем: у самого конца списка она не переключается.
     var barVisible by remember { mutableStateOf(true) }
     if (showCategoryBar) {
         LaunchedEffect(listState) {
@@ -334,6 +363,11 @@ private fun FeedPage(
             var lo = listState.firstVisibleItemScrollOffset
             snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
                 .collect { (idx, off) ->
+                    // Долистали до конца — не трогаем панель, иначе список дёрнется
+                    if (!listState.canScrollForward) {
+                        li = idx; lo = off
+                        return@collect
+                    }
                     barVisible = when {
                         idx == 0 && off == 0 -> true
                         idx < li -> true
@@ -359,8 +393,14 @@ private fun FeedPage(
             EmptyFeed(isMyEvents = emptyIsMy)
         } else {
             LazyColumn(
-                state               = listState,
-                contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                state = listState,
+                // Нижний отступ увеличен намеренно: поверх ленты висит плавающая
+                // кнопка «+» (56.dp + отступы) — при маленьком padding она перекрывала
+                // низ последней карточки, где показаны дата и время мероприятия.
+                // Плюс запас под жестовую навигационную полоску.
+                contentPadding = PaddingValues(
+                    start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp,
+                ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(upcoming, key = { it.id }, contentType = { "event" }) { event ->

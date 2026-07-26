@@ -1,6 +1,7 @@
 const { query, transaction } = require('../config/db');
 const { notifyEventParticipants, notifyNewEvent } = require('../services/notificationService');
 const { containsProfanity } = require('../utils/moderation');
+const { deleteUploadedFile } = require('./uploadController');
 
 // Собирает WHERE-условия и параметры из фильтров запроса (category, search, location).
 // timeClause добавляется отдельно для upcoming/past.
@@ -369,6 +370,23 @@ const updateEvent = async (req, res) => {
     } = req.body;
 
     try {
+        // Удаление обложки мероприятия: пустая строка = «убрать фото»,
+        // null/undefined = «не менять» (ниже COALESCE). Проверяем права заранее,
+        // чтобы чужую обложку нельзя было снести этим путём.
+        if (cover_url === '') {
+            const cur = await query(
+                'SELECT cover_url FROM events WHERE id = $1 AND creator_id = $2',
+                [eventId, userId]
+            );
+            if (cur.rows.length > 0) {
+                await query(
+                    'UPDATE events SET cover_url = NULL WHERE id = $1 AND creator_id = $2',
+                    [eventId, userId]
+                );
+                deleteUploadedFile(cur.rows[0].cover_url);
+            }
+        }
+
         const result = await query(`
             UPDATE events SET
                 title            = COALESCE($1, title),

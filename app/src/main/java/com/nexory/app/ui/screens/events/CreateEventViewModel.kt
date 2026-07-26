@@ -18,6 +18,7 @@ data class CreateEventUiState(
     val isCreated:     Boolean       = false,
     val error:         String?       = null,
     val invalidFields: Set<String>   = emptySet(),  // имена полей с ошибкой (для подсветки)
+    val coverError:    String?       = null,        // причина сбоя загрузки обложки
     val loaded:        EventDto?      = null,        // для режима редактирования
 )
 
@@ -43,7 +44,22 @@ class CreateEventViewModel @Inject constructor(
         else -> null
     }
 
-    suspend fun uploadImage(uri: Uri): String? = uploader.upload(uri)
+    /**
+     * Загрузка обложки. Возвращает URL либо null, а причину сбоя кладёт в state —
+     * раньше ошибка молча терялась, и пользователь видел бесконечный спиннер.
+     */
+    suspend fun uploadImage(uri: Uri): String? {
+        _state.update { it.copy(coverError = null) }
+        return when (val result = uploader.uploadWithResult(uri)) {
+            is com.nexory.app.data.network.UploadResult.Success -> result.url
+            is com.nexory.app.data.network.UploadResult.Failure -> {
+                _state.update { it.copy(coverError = result.message) }
+                null
+            }
+        }
+    }
+
+    fun clearCoverError() { _state.update { it.copy(coverError = null) } }
 
     // Загрузить существующее мероприятие для редактирования
     fun loadEvent(eventId: String) {
@@ -86,7 +102,9 @@ class CreateEventViewModel @Inject constructor(
                     if (!category.isNullOrBlank())    put("category",         category)
                     if (!endsAt.isNullOrBlank())      put("ends_at",          endsAt)
                     if (maxParticipants != null)      put("max_participants", maxParticipants.toString())
-                    if (!coverUrl.isNullOrBlank())    put("cover_url",        coverUrl)
+                    // Пустая строка — это осознанное «удалить обложку», её нужно
+                    // отправить; null означает «не менять» и не отправляется вовсе.
+                    if (coverUrl != null)             put("cover_url",        coverUrl)
                     if (!skillLevel.isNullOrBlank())  put("skill_level",      skillLevel)
                     if (!eventType.isNullOrBlank())   put("event_type",       eventType)
                     if (!priceDescription.isNullOrBlank()) put("price_description", priceDescription)

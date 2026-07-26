@@ -55,3 +55,21 @@ describe('Юридические документы', () => {
         expect(res.text).toMatch(/turtleshell2077@gmail\.com/);
     });
 });
+
+// Публичная конфигурация клиента: ссылка на приём переводов должна приходить
+// с сервера, а не быть зашитой в APK — иначе её смена требует релиза в сторе.
+describe('Клиентская конфигурация', () => {
+    it('GET /api/v1/config → 200 и поля donationUrl/donationEnabled', async () => {
+        const res = await request(app).get('/api/v1/config');
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveProperty('donationUrl');
+        expect(res.body).toHaveProperty('donationEnabled');
+        // Без переменной окружения приём переводов выключен — это валидное состояние
+        expect(typeof res.body.donationEnabled).toBe('boolean');
+    });
+
+    it('конфиг доступен без авторизации', async () => {
+        const res = await request(app).get('/api/v1/config');
+        expect(res.status).not.toBe(401);
+    });
+});

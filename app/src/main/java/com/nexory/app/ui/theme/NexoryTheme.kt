@@ -14,12 +14,19 @@ import androidx.compose.ui.graphics.Color
 // поэтому при смене темы перерисовывается ВЕСЬ интерфейс без правок экранов.
 object NexoryColors {
     // ---- Брендовые (одинаковы в светлой и тёмной теме) ----
-    val PrimaryBlue   = Color(0xFF4A90E2)
-    val DeepBlue      = Color(0xFF1A3A6B)
+    //
+    // Акцент намеренно смещён из «телеграмного» голубого (#4A90E2 — почти тот же
+    // оттенок, что у Telegram) в индиго-фиолетовую зону. Это главный источник
+    // визуального сходства: пользователь узнаёт мессенджер именно по цвету акцента.
+    // Индиго сохраняет преемственность с фирменным градиентом «синий → фиолетовый»,
+    // но читается как отдельный бренд, а не как клон.
+    // Имя PrimaryBlue оставлено, чтобы не переписывать сотни мест использования.
+    val PrimaryBlue   = Color(0xFF5B62F0)   // индиго — основной акцент
+    val DeepBlue      = Color(0xFF272B63)   // глубокий индиго для подложек
     val Violet        = Color(0xFF7B4FE0)
     val LightViolet   = Color(0xFFAA80FF)
-    val GradientStart = Color(0xFF4A90E2)
-    val GradientEnd   = Color(0xFF7B4FE0)
+    val GradientStart = Color(0xFF5B62F0)
+    val GradientEnd   = Color(0xFF8B49E8)
     val Error         = Color(0xFFE25A5A)
 
     // ---- Зависят от темы (реактивные) ----

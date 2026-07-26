@@ -173,6 +173,14 @@ data class WsNewMessagePayload(
     val message: MessageDto? = null,
 )
 
+// ---- Конфигурация клиента (GET /config) ----
+
+// Настройки, которые приходят с сервера и могут меняться без выпуска новой версии.
+data class AppConfigDto(
+    @SerializedName("donationUrl")     val donationUrl:     String  = "",
+    @SerializedName("donationEnabled") val donationEnabled: Boolean = false,
+)
+
 // ---- Создание чата ----
 
 data class CreateDirectChatResponse(

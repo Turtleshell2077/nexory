@@ -69,6 +69,20 @@ app.use('/legal', express.static(path.join(__dirname, '../public/legal'), {
 // Healthcheck — для мониторинга/балансировщика
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
+// Публичная конфигурация клиента.
+// Выносим сюда значения, которые должны меняться БЕЗ выпуска новой версии APK.
+// Сейчас это ссылка на приём переводов: её выдаёт Т-банк («Переводы» → «Ссылка на
+// перевод»), она может смениться, а ждать ради этого релиз в сторе нельзя.
+// Эндпоинт без авторизации: секретов тут нет, ссылка и так открывается в браузере.
+app.get('/api/v1/config', (req, res) => {
+    const donationUrl = (process.env.DONATION_URL || '').trim();
+    res.json({
+        // Пустая строка = приём переводов не настроен, клиент покажет это честно
+        donationUrl,
+        donationEnabled: donationUrl.length > 0,
+    });
+});
+
 // Все API-маршруты под префиксом /api/v1
 app.use('/api/v1', routes);
 

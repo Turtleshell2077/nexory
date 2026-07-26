@@ -18,12 +18,17 @@ const storage = multer.diskStorage({
     },
 });
 
+// ⚠️ ВАЖНО ПРО NGINX:
+// Даже с этим лимитом загрузка оборвётся, если у nginx не поднят client_max_body_size —
+// по умолчанию он всего 1 МБ, и запрос не доходит до Node (ответ 413).
+// В конфиге сайта должно быть:  client_max_body_size 15m;
+// Клиент сжимает фото до ~200–600 КБ, но запас нужен для нестандартных форматов.
 const upload = multer({
     storage,
-    limits: { fileSize: 8 * 1024 * 1024 }, // 8 МБ
+    limits: { fileSize: 12 * 1024 * 1024 }, // 12 МБ
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/')) cb(null, true);
-        else cb(new Error('Только изображения'));
+        else cb(new Error('Можно загружать только изображения'));
     },
 }).single('file');
 
@@ -31,7 +36,11 @@ const upload = multer({
 const uploadImage = (req, res) => {
     upload(req, res, async (err) => {
         if (err) {
-            console.error('[upload]', err.message);
+            console.error('[upload]', err.code || '', err.message);
+            // Разделяем причины: клиенту важно понимать, менять фото или настройки
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(413).json({ error: 'Файл слишком большой (максимум 12 МБ)' });
+            }
             return res.status(400).json({ error: err.message });
         }
         if (!req.file) return res.status(400).json({ error: 'Файл не получен' });
@@ -59,4 +68,38 @@ const uploadImage = (req, res) => {
     });
 };
 
-module.exports = { uploadImage, uploadDir };
+/**
+ * Удаляет ранее загруженный файл по его публичному URL.
+ *
+ * Используется при удалении фото профиля/мероприятия и при удалении аккаунта,
+ * чтобы на диске не копились «осиротевшие» картинки.
+ *
+ * Безопасность: берём только basename и проверяем, что он не содержит переходов
+ * по каталогам — URL приходит из БД, но относиться к нему как к доверенному пути нельзя.
+ * Ошибки не пробрасываем: неудача удаления файла не должна ломать основную операцию.
+ */
+function deleteUploadedFile(fileUrl) {
+    if (!fileUrl) return false;
+    try {
+        const pathname = new URL(fileUrl, 'http://local').pathname;
+        // Трогаем только собственные загрузки
+        if (!pathname.includes('/uploads/')) return false;
+
+        const fileName = path.basename(pathname);
+        if (!fileName || fileName.includes('..') || fileName.includes('/')) return false;
+
+        const filePath = path.join(uploadDir, fileName);
+        // Финальная проверка: результат обязан лежать внутри uploads
+        if (!filePath.startsWith(uploadDir)) return false;
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            return true;
+        }
+    } catch (e) {
+        console.warn('[deleteUploadedFile]', e.message);
+    }
+    return false;
+}
+
+module.exports = { uploadImage, uploadDir, deleteUploadedFile };

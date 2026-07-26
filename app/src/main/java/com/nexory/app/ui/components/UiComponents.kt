@@ -187,27 +187,15 @@ fun MetroAutocompleteField(
         if (showSuggestions) MoscowMetro.suggest(value) else emptyList()
     }
 
+    val showList = suggestions.isNotEmpty() &&
+            !(suggestions.size == 1 && suggestions[0] == value)
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = { showSuggestions = true; onChange(it) },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(label, color = NexoryColors.TextSecondary) },
-            leadingIcon = { Icon(Icons.Default.Place, null) },
-            trailingIcon = {
-                if (value.isNotEmpty()) {
-                    IconButton(onClick = { showSuggestions = false; onChange("") }) {
-                        Icon(Icons.Default.Close, "Очистить", tint = NexoryColors.TextSecondary)
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = nexoryTextFieldColors(),
-        )
-        // Список подсказок под полем
-        if (suggestions.isNotEmpty() && !(suggestions.size == 1 && suggestions[0] == value)) {
-            Spacer(Modifier.height(4.dp))
+        // Список подсказок располагается НАД полем ввода.
+        // Причина: поле часто находится в нижней половине экрана, и при открытой
+        // клавиатуре список, показанный снизу, полностью уходил под неё —
+        // выбрать станцию было невозможно. Сверху он всегда остаётся видимым.
+        if (showList) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -225,7 +213,26 @@ fun MetroAutocompleteField(
                     )
                 }
             }
+            Spacer(Modifier.height(4.dp))
         }
+
+        OutlinedTextField(
+            value = value,
+            onValueChange = { showSuggestions = true; onChange(it) },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text(label, color = NexoryColors.TextSecondary) },
+            leadingIcon = { Icon(Icons.Default.Place, null) },
+            trailingIcon = {
+                if (value.isNotEmpty()) {
+                    IconButton(onClick = { showSuggestions = false; onChange("") }) {
+                        Icon(Icons.Default.Close, "Очистить", tint = NexoryColors.TextSecondary)
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            colors = nexoryTextFieldColors(),
+        )
     }
 }
 

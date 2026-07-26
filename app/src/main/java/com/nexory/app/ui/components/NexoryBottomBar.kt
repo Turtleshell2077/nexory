@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -31,8 +32,20 @@ fun NexoryBottomBar(navController: NavController, currentRoute: String) {
                     }
                 },
                 icon  = { Icon(icon, contentDescription = label, tint = if (selected) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary) },
-                label = { Text(label, fontSize = 11.sp, color = if (selected) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary) },
-                colors = NavigationBarItemDefaults.colors(indicatorColor = NexoryColors.DeepBlue.copy(alpha = 0.2f)),
+                label = {
+                    Text(
+                        label,
+                        fontSize = 11.sp,
+                        // Активная вкладка выделяется не только цветом, но и насыщенностью —
+                        // дополнительный признак вместо привычной «просто подсветки»
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (selected) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
+                    )
+                },
+                // Индикатор в акцентном индиго вместо приглушённой синей подложки
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = NexoryColors.PrimaryBlue.copy(alpha = 0.16f),
+                ),
             )
         }
     }

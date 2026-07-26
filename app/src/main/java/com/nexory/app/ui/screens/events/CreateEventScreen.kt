@@ -87,6 +87,45 @@ fun CreateEventScreen(
     var typeExpanded    by remember { mutableStateOf(false) }
     var showDateTimeDialog by remember { mutableStateOf(false) }
     var showLimitInfo by remember { mutableStateOf(false) }
+    var showRemoveCoverDialog by remember { mutableStateOf(false) }
+
+    // Подтверждение удаления обложки мероприятия
+    if (showRemoveCoverDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveCoverDialog = false },
+            containerColor = NexoryColors.SurfaceDark,
+            shape = RoundedCornerShape(20.dp),
+            icon = { Icon(Icons.Default.DeleteOutline, null, tint = NexoryColors.Error, modifier = Modifier.size(32.dp)) },
+            title = { Text("Удалить фото мероприятия?", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    if (isEdit)
+                        "Обложка будет удалена после сохранения изменений. Карточка мероприятия " +
+                            "будет показываться с цветной заливкой."
+                    else
+                        "Выбранное фото будет убрано. Можно выбрать другое или оставить " +
+                            "мероприятие без обложки.",
+                    color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRemoveCoverDialog = false
+                    coverUri = null
+                    // Пустая строка = «удалить» для бэкенда (null означал бы «не менять»)
+                    coverUrl = ""
+                    viewModel.clearCoverError()
+                }) {
+                    Text("Удалить", color = NexoryColors.Error, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveCoverDialog = false }) {
+                    Text("Отмена", color = NexoryColors.TextSecondary)
+                }
+            },
+        )
+    }
 
     // Кадрирование обложки 16:9
     val cropCover = com.nexory.app.ui.components.rememberImageCropper(aspectX = 16f, aspectY = 9f, circle = false) { cropped ->
@@ -167,9 +206,13 @@ fun CreateEventScreen(
                     .clickable { imagePicker.launch("image/*") },
                 contentAlignment = Alignment.Center,
             ) {
-                if (coverUri != null) {
+                // Что показывать: только что выбранный файл, иначе уже сохранённую
+                // обложку (важно для режима редактирования — раньше она не отображалась).
+                // Пустая строка в coverUrl = обложку удалили, показываем заглушку.
+                val previewModel: Any? = coverUri ?: coverUrl?.takeIf { it.isNotBlank() }
+                if (previewModel != null) {
                     AsyncImage(
-                        model = coverUri, contentDescription = null,
+                        model = previewModel, contentDescription = null,
                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
                     )
                     if (uploadingCover) {
@@ -193,11 +236,53 @@ fun CreateEventScreen(
                             Text("Изменить фото", color = Color.White, fontSize = 12.sp)
                         }
                     }
+                    // Кнопка удаления обложки — рядом с изменением, в левом нижнем углу
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(10.dp)
+                            .background(Color.Black.copy(0.5f), RoundedCornerShape(8.dp))
+                            .clickable { showRemoveCoverDialog = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DeleteOutline, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Удалить", color = Color.White, fontSize = 12.sp)
+                        }
+                    }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.AddPhotoAlternate, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(40.dp))
                         Spacer(Modifier.height(6.dp))
                         Text("Добавить фото мероприятия", color = NexoryColors.TextSecondary, fontSize = 14.sp)
+                    }
+                }
+            }
+
+            // Ошибка загрузки обложки с конкретной причиной и повтором.
+            // Раньше сбой загрузки был полностью молчаливым.
+            uiState.coverError?.let { err ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(NexoryColors.Error.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Icon(Icons.Default.ErrorOutline, null, tint = NexoryColors.Error, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(err, color = NexoryColors.Error, fontSize = 12.sp, lineHeight = 17.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Выбрать другое фото",
+                            color = NexoryColors.PrimaryBlue, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable {
+                                viewModel.clearCoverError()
+                                imagePicker.launch("image/*")
+                            },
+                        )
                     }
                 }
             }

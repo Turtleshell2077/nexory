@@ -39,17 +39,48 @@ class ProfileViewModel @Inject constructor(
     // Загрузить новый аватар с галереи и сохранить
     fun uploadAvatar(uri: Uri) {
         viewModelScope.launch {
-            _uiState.update { it.copy(uploadingAvatar = true) }
-            val url = uploader.upload(uri)
-            if (url != null) {
-                try {
-                    val response = api.updateProfile(mapOf("avatar_url" to url))
-                    _uiState.update { it.copy(user = response.user) }
-                } catch (_: Exception) {}
+            _uiState.update { it.copy(uploadingAvatar = true, error = null) }
+            when (val result = uploader.uploadWithResult(uri)) {
+                is com.nexory.app.data.network.UploadResult.Success -> {
+                    try {
+                        val response = api.updateProfile(mapOf("avatar_url" to result.url))
+                        response.user?.let { cache.saveMyProfile(it) }
+                        _uiState.update { it.copy(user = response.user) }
+                    } catch (e: Exception) {
+                        _uiState.update {
+                            it.copy(error = com.nexory.app.data.network.ApiError.message(e))
+                        }
+                    }
+                }
+                is com.nexory.app.data.network.UploadResult.Failure -> {
+                    // Раньше сбой загрузки был молчаливым — спиннер просто гас
+                    _uiState.update { it.copy(error = result.message) }
+                }
             }
             _uiState.update { it.copy(uploadingAvatar = false) }
         }
     }
+
+    /**
+     * Удалить фото профиля — пользователь вернётся к генеративному аватару.
+     * Пустая строка в avatar_url трактуется бэкендом как «удалить»;
+     * null означал бы «не менять» из-за COALESCE в SQL.
+     */
+    fun removeAvatar() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadingAvatar = true, error = null) }
+            try {
+                val response = api.updateProfile(mapOf("avatar_url" to ""))
+                response.user?.let { cache.saveMyProfile(it) }
+                _uiState.update { it.copy(user = response.user) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = com.nexory.app.data.network.ApiError.message(e)) }
+            }
+            _uiState.update { it.copy(uploadingAvatar = false) }
+        }
+    }
+
+    fun clearError() { _uiState.update { it.copy(error = null) } }
 
     fun loadProfile() {
         viewModelScope.launch {

@@ -223,12 +223,16 @@ fun MessageBubble(message: MessageDto, isMyMessage: Boolean) {
             Box(
                 modifier = Modifier
                     .background(
-                        color  = bubbleColor,
-                        shape  = RoundedCornerShape(
-                            topStart    = if (isMyMessage) 16.dp else 4.dp,
-                            topEnd      = if (isMyMessage) 4.dp  else 16.dp,
-                            bottomStart = 16.dp,
-                            bottomEnd   = 16.dp,
+                        color = bubbleColor,
+                        // Форма пузыря: «якорь» у НИЖНЕГО угла и крупное скругление 20.dp.
+                        // Раньше срезался верхний угол — узнаваемый приём популярных
+                        // мессенджеров; нижний якорь с большим радиусом читается иначе
+                        // и при этом остаётся привычным по логике «свои справа, чужие слева».
+                        shape = RoundedCornerShape(
+                            topStart    = 20.dp,
+                            topEnd      = 20.dp,
+                            bottomStart = if (isMyMessage) 20.dp else 6.dp,
+                            bottomEnd   = if (isMyMessage) 6.dp  else 20.dp,
                         )
                     )
                     .padding(horizontal = 12.dp, vertical = 8.dp),
