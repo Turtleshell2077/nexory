@@ -75,6 +75,7 @@ fun ProfileScreen(
             onPickPhoto = { avatarPicker.launch("image/*") },
             onPickPreset = { viewModel.setAvatarPreset(it) },
             onRemove = { viewModel.removeAvatar() },
+            onOpenStylePicker = { navController.navigate(Screen.AvatarStyle.route) },
             onDismiss = { showAvatarPicker = false },
         )
     }

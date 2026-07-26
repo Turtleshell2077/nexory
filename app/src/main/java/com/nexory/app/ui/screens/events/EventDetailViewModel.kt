@@ -13,7 +13,19 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Явные фазы экрана.
+ *
+ * Раньше состояний не было и экран решал, что показать, по `event == null`.
+ * На первом кадре событие ещё не загружено — и пользователь на долю секунды
+ * видел «Мероприятие не найдено» вместо индикатора загрузки. Теперь «не найдено»
+ * показывается ТОЛЬКО после реально завершившегося запроса.
+ */
+enum class DetailPhase { LOADING, SUCCESS, NOT_FOUND, ERROR }
+
 data class EventDetailUiState(
+    /** Стартуем сразу с загрузки: до ответа сервера никаких выводов не делаем. */
+    val phase:        DetailPhase          = DetailPhase.LOADING,
     val event:        EventDto?            = null,
     val participants: List<ParticipantDto> = emptyList(),
     val isJoined:     Boolean         = false,
@@ -37,22 +49,46 @@ class EventDetailViewModel @Inject constructor(
 
     fun loadEvent(eventId: String) {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
+            // Фазу LOADING ставим только на ПЕРВУЮ загрузку. При обновлении на
+            // возврате из редактирования экран уже наполнен — незачем мигать спиннером.
+            _state.update {
+                it.copy(
+                    phase = if (it.event == null) DetailPhase.LOADING else it.phase,
+                    isLoading = true,
+                    error = null,
+                )
+            }
             try {
                 val response = api.getEvent(eventId)
                 val userId   = tokenManager.getUserId()
                 _state.update {
                     it.copy(
+                        phase        = DetailPhase.SUCCESS,
                         event        = response.event,
                         participants = response.participants,
                         isJoined     = response.isJoined,
                         isMyEvent    = response.event.creatorId == userId,
                         eventChatId  = response.chatId,
                         isLoading    = false,
+                        error        = null,
                     )
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, error = "Не удалось загрузить мероприятие") }
+                val parsed = com.nexory.app.data.network.ApiError.parse(e)
+                // 404 — мероприятие действительно удалено или недоступно.
+                // Любая другая ошибка (сеть, 500) — это НЕ «не найдено».
+                val notFound = parsed.code == 404
+                _state.update {
+                    it.copy(
+                        phase = when {
+                            it.event != null -> DetailPhase.SUCCESS  // данные уже есть, не рушим экран
+                            notFound         -> DetailPhase.NOT_FOUND
+                            else             -> DetailPhase.ERROR
+                        },
+                        isLoading = false,
+                        error = if (notFound) "Мероприятие не найдено" else parsed.message,
+                    )
+                }
             }
         }
     }

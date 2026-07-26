@@ -147,21 +147,39 @@ fun EventDetailScreen(
     }
 
     Scaffold(containerColor = NexoryColors.DeepBlack) { padding ->
+        // Ветвимся по явной фазе, а не по «event == null»: раньше на первом кадре
+        // (до старта запроса) экран попадал в ветку «не найдено» и показывал её вспышкой.
         when {
-            uiState.isLoading && uiState.event == null -> {
+            uiState.phase == DetailPhase.LOADING || (uiState.event == null && uiState.isLoading) -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = NexoryColors.PrimaryBlue)
                 }
             }
             uiState.event == null -> {
+                val isNotFound = uiState.phase == DetailPhase.NOT_FOUND
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.ErrorOutline, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(56.dp))
+                        Icon(
+                            if (isNotFound) Icons.Default.SearchOff else Icons.Default.CloudOff,
+                            null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(56.dp),
+                        )
                         Spacer(Modifier.height(12.dp))
-                        Text(uiState.error ?: "Мероприятие не найдено", color = NexoryColors.TextSecondary)
+                        Text(
+                            if (isNotFound) "Мероприятие не найдено"
+                            else (uiState.error ?: "Не удалось загрузить мероприятие"),
+                            color = NexoryColors.TextSecondary,
+                        )
                         Spacer(Modifier.height(16.dp))
-                        TextButton(onClick = { navController.popBackStack() }) {
-                            Text("Назад", color = NexoryColors.PrimaryBlue)
+                        Row {
+                            // При ошибке связи логично предложить повтор, а не только «Назад»
+                            if (!isNotFound) {
+                                TextButton(onClick = { viewModel.loadEvent(eventId) }) {
+                                    Text("Повторить", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            TextButton(onClick = { navController.popBackStack() }) {
+                                Text("Назад", color = NexoryColors.TextSecondary)
+                            }
                         }
                     }
                 }

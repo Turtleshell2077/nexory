@@ -110,8 +110,12 @@ class CreateEventViewModel @Inject constructor(
                     if (!priceDescription.isNullOrBlank()) put("price_description", priceDescription)
                     if (!metro.isNullOrBlank())       put("metro",            metro)
                 }
-                if (eventId == null) api.createEvent(body) else api.updateEvent(eventId, body)
-                _state.update { it.copy(isLoading = false, isCreated = true) }
+                // Берём мероприятие из ОТВЕТА сервера, а не полагаемся на локальные
+                // значения формы: так экран и кэш получают ровно то, что реально
+                // записано в БД (включая новую ссылку на обложку).
+                val response = if (eventId == null) api.createEvent(body) else api.updateEvent(eventId, body)
+                val saved = response["event"]
+                _state.update { it.copy(isLoading = false, isCreated = true, loaded = saved ?: it.loaded) }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) return@launch
                 val parsed = com.nexory.app.data.network.ApiError.parse(e)

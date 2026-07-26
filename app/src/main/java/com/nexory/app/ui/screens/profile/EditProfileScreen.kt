@@ -286,12 +286,8 @@ fun EditProfileScreen(
                     Icon(Icons.Default.QuestionMark, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(11.dp))
                 }
             }
-            ProfileField(
-                value = interestQuery,
-                onValueChange = { interestQuery = it },
-                placeholder = "Начни вводить и выбери из списка",
-            )
-            // Подсказки по вводу
+            // Подсказки по вводу — НАД полем, единообразно с полем метро.
+            // Раньше список был под полем и при открытой клавиатуре уходил под неё.
             val q = interestQuery.trim()
             val suggestions = if (q.isBlank()) emptyList()
                 else INTERESTS.filter { it.contains(q, ignoreCase = true) && it !in interests }.take(6)
@@ -303,8 +299,10 @@ fun EditProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(max = 200.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(NexoryColors.SurfaceDark),
+                        .background(NexoryColors.SurfaceDark)
+                        .verticalScroll(rememberScrollState()),
                 ) {
                     suggestions.forEach { s ->
                         Text(
@@ -332,6 +330,14 @@ fun EditProfileScreen(
                     }
                 }
             }
+
+            // Поле ввода идёт ПОСЛЕ подсказок — так список всегда выше поля
+            ProfileField(
+                value = interestQuery,
+                onValueChange = { interestQuery = it },
+                placeholder = "Начни вводить и выбери из списка",
+            )
+
             // Выбранные увлечения чипами
             if (interests.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -430,6 +436,7 @@ fun EditProfileScreen(
                 avatarUrl = ""
                 avatarError = null
             },
+            onOpenStylePicker = { navController.navigate(com.nexory.app.navigation.Screen.AvatarStyle.route) },
             onDismiss = { showAvatarDialog = false },
         )
     }

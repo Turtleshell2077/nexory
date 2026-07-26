@@ -29,15 +29,14 @@ import androidx.compose.ui.unit.sp
 import com.nexory.app.ui.theme.NexoryColors
 
 /**
- * Выбор аватара: фотография из галереи, сгенерированный аватар или удаление фото.
+ * Действия с аватаром: загрузить фото, удалить фото, выбрать оформление.
  *
- * Механика генерируемых аватаров: шесть стилей (градиент и пять узорных).
- * Стиль нажимается — и раскрывается палитра цветовых вариантов именно этого стиля.
- * Так пользователь сначала выбирает «характер» аватара, а потом цвет, и ему не
- * приходится листать десятки одинаковых кружков.
+ * Сам выбор оформления живёт на отдельных экранах (шаблон → цвет): внутри
+ * этого листа сетка вариантов получалась тесной, а перестроение содержимого
+ * при выборе дёргало экран под ним.
  *
- * Все действия с аватаром собраны здесь: раньше кнопка удаления висела прямо
- * на экране профиля и загромождала его.
+ * Все действия собраны здесь: раньше кнопка удаления висела прямо на экране
+ * профиля и загромождала его.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,13 +47,10 @@ fun AvatarPickerSheet(
     onPickPreset: (String) -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
+    /** Открыть двухшаговый выбор оформления (шаблон → цвет). */
+    onOpenStylePicker: (() -> Unit)? = null,
 ) {
     val hasPhoto = !currentUrl.isNullOrBlank() && !AvatarPresets.isPreset(currentUrl)
-    val current = AvatarPresets.parse(currentUrl)
-    val initials = remember(userName) { AvatarPresets.initialsOf(userName) }
-
-    // Раскрытый стиль. По умолчанию раскрываем тот, что уже выбран.
-    var expandedStyle by remember { mutableStateOf(current?.style) }
     var confirmRemove by remember { mutableStateOf(false) }
 
     if (confirmRemove) {
@@ -116,95 +112,16 @@ fun AvatarPickerSheet(
                 )
             }
 
-            Spacer(Modifier.height(22.dp))
-            Text("Или соберите аватар", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextSecondary)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                "Нажмите стиль, чтобы выбрать цвет",
-                fontSize = 12.sp, color = NexoryColors.TextSecondary,
+            Spacer(Modifier.height(8.dp))
+            // Выбор оформления вынесен в отдельный двухшаговый флоу
+            // (шаблон → цвет). Внутри листа сетка вариантов была слишком
+            // тесной, а при выборе экран под ней перестраивался и прыгал.
+            ActionRow(
+                icon = Icons.Default.Palette,
+                title = "Выбрать стиль аватара",
+                subtitle = "Шаблон и цвет вместо фотографии",
+                onClick = { onOpenStylePicker?.invoke(); onDismiss() },
             )
-            Spacer(Modifier.height(14.dp))
-
-            AvatarPresets.Style.entries.forEach { style ->
-                val isExpanded = expandedStyle == style
-                val isCurrentStyle = current?.style == style
-                // В свёрнутом виде показываем стиль в цвете, который у него выбран
-                val previewVariant = if (isCurrentStyle) current!!.variant else 0
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(
-                            if (isCurrentStyle) NexoryColors.PrimaryBlue.copy(alpha = 0.10f)
-                            else NexoryColors.SurfaceMid
-                        ),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { expandedStyle = if (isExpanded) null else style }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        GeneratedAvatar(
-                            selection = AvatarPresets.Selection(style, previewVariant),
-                            initials = initials,
-                            size = 44.dp,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(style.title, color = NexoryColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                            if (isCurrentStyle) {
-                                Text("Выбран", color = NexoryColors.PrimaryBlue, fontSize = 12.sp)
-                            }
-                        }
-                        Icon(
-                            if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (isExpanded) "Свернуть" else "Показать цвета",
-                            tint = NexoryColors.TextSecondary,
-                        )
-                    }
-
-                    AnimatedVisibility(
-                        visible = isExpanded,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        // Горизонтальная лента цветов этого стиля
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(start = 12.dp, end = 12.dp, bottom = 14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            repeat(AvatarPresets.variantCount) { variant ->
-                                val selected = isCurrentStyle && current?.variant == variant
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .then(
-                                            if (selected) Modifier.border(3.dp, NexoryColors.PrimaryBlue, CircleShape)
-                                            else Modifier
-                                        )
-                                        .clickable {
-                                            onPickPreset(AvatarPresets.toUrl(style, variant))
-                                            onDismiss()
-                                        },
-                                ) {
-                                    GeneratedAvatar(
-                                        selection = AvatarPresets.Selection(style, variant),
-                                        initials = initials,
-                                        size = 52.dp,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }

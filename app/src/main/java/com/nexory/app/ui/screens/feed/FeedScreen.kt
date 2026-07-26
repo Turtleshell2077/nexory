@@ -42,6 +42,7 @@ import com.nexory.app.data.network.EventDto
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.components.NexoryBottomBar
 import com.nexory.app.ui.components.MetroAutocompleteField
+import com.nexory.app.ui.screens.profile.INTERESTS
 import com.nexory.app.ui.screens.events.EVENT_CATEGORIES
 import com.nexory.app.ui.screens.events.SKILL_LEVELS
 import com.nexory.app.ui.screens.events.formatEventDateTime
@@ -68,6 +69,8 @@ fun FeedScreen(
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             viewModel.refresh()
+            // Держим «Мои увлечения» в фильтре синхронными с профилем
+            viewModel.syncMyInterests()
         }
     }
 
@@ -232,12 +235,89 @@ fun FeedScreen(
                             unfocusedTextColor      = NexoryColors.TextPrimary,
                         ),
                     )
-                    // Подсказки из профиля — быстрый выбор тапом
-                    val suggestions = (uiState.myInterests + uiState.selectedInterests.toList()).distinct()
-                    if (suggestions.isNotEmpty()) {
-                        Spacer(Modifier.height(8.dp))
+                    // Секция «Мои увлечения» — свёрнута по умолчанию и отделена от
+                    // общего списка. Раньше личные интересы показывались вперемешку
+                    // со всеми остальными, и было непонятно, что откуда взялось.
+                    if (uiState.myInterests.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        var myInterestsExpanded by remember { mutableStateOf(false) }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(NexoryColors.SurfaceMid),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { myInterestsExpanded = !myInterestsExpanded }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Default.Person, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Мои увлечения", color = NexoryColors.TextPrimary, fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                                Text("${uiState.myInterests.size}", color = NexoryColors.TextSecondary, fontSize = 13.sp)
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    if (myInterestsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = if (myInterestsExpanded) "Свернуть" else "Раскрыть",
+                                    tint = NexoryColors.TextSecondary,
+                                )
+                            }
+                            if (myInterestsExpanded) {
+                                Column(modifier = Modifier.padding(horizontal = 14.dp).padding(bottom = 14.dp)) {
+                                    // «Выбрать все» первым пунктом раскрытого списка
+                                    val allSelected = uiState.myInterests.all { it in uiState.selectedInterests }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                if (allSelected) viewModel.clearInterests()
+                                                else viewModel.useMyProfileInterests()
+                                            }
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            if (allSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                                            null,
+                                            tint = if (allSelected) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            if (allSelected) "Снять выбор" else "Выбрать все",
+                                            color = NexoryColors.PrimaryBlue, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                                        )
+                                    }
+                                    Spacer(Modifier.height(6.dp))
+                                    FlowRowChips(
+                                        items = uiState.myInterests,
+                                        selected = uiState.selectedInterests,
+                                        onToggle = { viewModel.toggleInterest(it) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Общий список: всё, что уже выбрано вручную, плюс популярные варианты.
+                    // Личные увлечения сюда намеренно НЕ подмешиваются — они в секции выше.
+                    val generalOptions = remember(uiState.selectedInterests, uiState.myInterests) {
+                        (uiState.selectedInterests.toList() + INTERESTS)
+                            .distinct()
+                            .filter { item -> uiState.myInterests.none { it.equals(item, ignoreCase = true) } }
+                            .take(24)
+                    }
+                    if (generalOptions.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text("Все увлечения", fontSize = 12.sp, color = NexoryColors.TextSecondary)
+                        Spacer(Modifier.height(6.dp))
                         FlowRowChips(
-                            items = suggestions,
+                            items = generalOptions,
                             selected = uiState.selectedInterests,
                             onToggle = { viewModel.toggleInterest(it) },
                         )

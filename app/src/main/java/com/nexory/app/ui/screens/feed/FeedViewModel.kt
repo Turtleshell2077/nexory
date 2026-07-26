@@ -95,9 +95,43 @@ class FeedViewModel @Inject constructor(
 
     // Обновляем обе ленты (вызывается на RESUMED). Троттлинг убирает лишние
     // перезагрузки при быстром возврате на экран — меньше фризов.
+    /**
+     * Перечитывает увлечения из профиля.
+     *
+     * Вызывается при каждом возврате в ленту, поэтому «Мои увлечения» в фильтре
+     * всегда соответствуют профилю: добавил интерес в профиле — он появился в
+     * фильтре, удалил — исчез. Раньше список читался один раз при создании
+     * ViewModel и после правки профиля оставался устаревшим.
+     */
+    fun syncMyInterests() {
+        viewModelScope.launch {
+            val fresh = try {
+                api.getMyProfile().user?.sports
+            } catch (_: Exception) {
+                cache.loadMyProfile()?.sports
+            }
+            val interests = fresh?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+            _uiState.update { state ->
+                // Удалённые из профиля увлечения убираем и из активного фильтра,
+                // иначе лента продолжала бы фильтроваться по несуществующему интересу.
+                val stillValid = state.selectedInterests.filter { sel ->
+                    interests.any { it.equals(sel, ignoreCase = true) } ||
+                        state.myInterests.none { it.equals(sel, ignoreCase = true) }
+                }.toSet()
+                state.copy(myInterests = interests, selectedInterests = stillValid)
+            }
+        }
+    }
+
     fun refresh() {
+        // Троттлинг нужен только чтобы не грузить ленту дважды при быстром
+        // переключении вкладок. 1.5 секунды оказались слишком много: вернувшись
+        // из редактирования мероприятия, экран попадал в окно троттлинга и
+        // показывал старые данные — в том числе прежнюю обложку.
+        // 400 мс от двойной загрузки защищают, а любое реальное действие
+        // пользователя занимает больше.
         val now = System.currentTimeMillis()
-        if (now - lastRefresh < 1500L) return
+        if (now - lastRefresh < 400L) return
         lastRefresh = now
         loadAll()
         loadMy()

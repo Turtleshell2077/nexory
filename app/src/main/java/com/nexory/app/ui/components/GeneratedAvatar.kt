@@ -16,18 +16,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
- * Сгенерированный аватар: цветной фон с узором по выбранному стилю и инициалами.
+ * Аватар-заглушка: фон по выбранному шаблону плюс инициалы.
  *
- * Рисуется на Canvas, а не картинкой — поэтому масштабируется без потери качества
- * и не требует ни загрузки по сети, ни места на диске. Один и тот же компонент
- * используется и в [UserAvatar], и в превью на экране выбора, чтобы выбранный
- * вариант выглядел ровно так же, как потом в списках.
+ * Рисуется на Canvas, а не картинкой: масштабируется без потери качества,
+ * ничего не грузит по сети и не занимает места на диске. Тот же компонент
+ * используется и в списках, и в превью на экранах выбора — поэтому выбранный
+ * вариант выглядит ровно так же, как потом в приложении.
+ *
+ * @param seed стабильный ключ (id пользователя) — от него зависит расстановка
+ *             фигур в геометрическом шаблоне, чтобы у каждого получился свой узор.
  */
 @Composable
 fun GeneratedAvatar(
@@ -35,111 +40,135 @@ fun GeneratedAvatar(
     initials: String,
     size: Dp,
     modifier: Modifier = Modifier,
+    seed: String = initials,
 ) {
-    val colors = AvatarPresets.paletteAt(selection.variant)
+    val palette = AvatarPresets.paletteAt(selection.variant)
+    val hash = AvatarPresets.hashOf(seed)
+
+    // У дуотона инициалы крупнее: он на них и построен
+    val textScale = if (selection.style == AvatarPresets.Style.DUOTONE) 0.46f else 0.36f
 
     Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape),
+        modifier = modifier.size(size).clip(CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.size(size)) {
-            // Фон одинаков у всех стилей — различается наложенный узор
-            drawRect(Brush.linearGradient(colors), size = this.size)
             when (selection.style) {
-                AvatarPresets.Style.GRADIENT -> Unit // чистый градиент
-                AvatarPresets.Style.RINGS    -> drawRings()
-                AvatarPresets.Style.DOTS     -> drawDots()
-                AvatarPresets.Style.STRIPES  -> drawStripes()
-                AvatarPresets.Style.BLOCKS   -> drawBlocks()
-                AvatarPresets.Style.BURST    -> drawBurst()
+                AvatarPresets.Style.GRADIENT  -> drawGradient(palette)
+                AvatarPresets.Style.DUOTONE   -> drawDuotone(palette)
+                AvatarPresets.Style.GEOMETRIC -> drawGeometric(palette, hash)
+                AvatarPresets.Style.WAVES     -> drawWaves(palette)
+                AvatarPresets.Style.TEXTURE   -> drawTexture(palette)
             }
         }
         Text(
             text = initials,
             color = Color.White,
             fontWeight = FontWeight.Bold,
-            fontSize = (size.value * 0.36f).sp,
+            fontSize = (size.value * textScale).sp,
         )
     }
 }
 
-// Узоры рисуем полупрозрачным белым поверх градиента: так они читаются
-// на любой палитре и не спорят с цветом инициалов.
-private val Ink = Color.White.copy(alpha = 0.22f)
+// ---- Шаблоны ----
 
-private fun DrawScope.drawRings() {
-    val step = size.minDimension / 7f
-    for (i in 1..3) {
-        drawCircle(
-            color = Ink,
-            radius = step * i,
-            center = center,
-            style = Stroke(width = size.minDimension * 0.055f),
+/** Плавный переход трёх оттенков по диагонали. */
+private fun DrawScope.drawGradient(palette: List<Color>) {
+    drawRect(
+        Brush.linearGradient(
+            colors = palette,
+            start = Offset(0f, 0f),
+            end = Offset(size.width, size.height),
         )
-    }
+    )
 }
 
-private fun DrawScope.drawDots() {
-    val r = size.minDimension / 18f
-    val step = size.minDimension / 4.5f
-    var y = step / 2
-    var row = 0
-    while (y < size.height) {
-        var x = if (row % 2 == 0) step / 2 else step
-        while (x < size.width) {
-            drawCircle(color = Ink, radius = r, center = Offset(x, y))
+/** Два оттенка, разделённые мягкой диагональю — глубже плоской заливки. */
+private fun DrawScope.drawDuotone(palette: List<Color>) {
+    drawRect(palette[0])
+    val path = Path().apply {
+        moveTo(0f, size.height)
+        lineTo(0f, size.height * 0.35f)
+        // Лёгкий изгиб вместо прямой линии — выглядит мягче
+        quadraticBezierTo(size.width * 0.5f, size.height * 0.15f, size.width, size.height * 0.55f)
+        lineTo(size.width, size.height)
+        close()
+    }
+    drawPath(path, palette[1])
+}
+
+/**
+ * Абстрактный узор: круги и дуги, положение которых выводится из хэша id.
+ * У каждого пользователя получается свой, но всегда одинаковый рисунок.
+ */
+private fun DrawScope.drawGeometric(palette: List<Color>, hash: Int) {
+    drawRect(Brush.linearGradient(listOf(palette[0], palette[1])))
+
+    val accent = palette[2].copy(alpha = 0.55f)
+    val soft = Color.White.copy(alpha = 0.18f)
+    val s = size.minDimension
+
+    // Три круга разного размера в позициях, зависящих от хэша
+    val positions = listOf(
+        Offset(s * (0.18f + (hash % 5) * 0.06f), s * 0.24f),
+        Offset(s * (0.62f + ((hash / 7) % 4) * 0.05f), s * 0.70f),
+        Offset(s * 0.80f, s * (0.18f + ((hash / 13) % 4) * 0.05f)),
+    )
+    val radii = listOf(s * 0.20f, s * 0.15f, s * 0.10f)
+    positions.forEachIndexed { i, p ->
+        drawCircle(color = if (i % 2 == 0) accent else soft, radius = radii[i], center = p)
+    }
+    // Дуга-акцент
+    drawCircle(
+        color = Color.White.copy(alpha = 0.22f),
+        radius = s * 0.42f,
+        center = Offset(s * 0.5f, s * 0.5f),
+        style = Stroke(width = s * 0.035f),
+    )
+}
+
+/** Мягкие перетекающие формы поверх тонированного фона. */
+private fun DrawScope.drawWaves(palette: List<Color>) {
+    drawRect(Brush.verticalGradient(listOf(palette[0], palette[1])))
+
+    // Две волны разной высоты и прозрачности — создаёт ощущение глубины
+    fun wave(yFactor: Float, color: Color, amplitude: Float) {
+        val path = Path().apply {
+            moveTo(0f, size.height * yFactor)
+            cubicTo(
+                size.width * 0.25f, size.height * (yFactor - amplitude),
+                size.width * 0.75f, size.height * (yFactor + amplitude),
+                size.width, size.height * yFactor,
+            )
+            lineTo(size.width, size.height)
+            lineTo(0f, size.height)
+            close()
+        }
+        drawPath(path, color)
+    }
+    wave(0.62f, palette[2].copy(alpha = 0.45f), 0.14f)
+    wave(0.78f, Color.White.copy(alpha = 0.16f), 0.10f)
+}
+
+/** Тонкая диагональная сетка поверх ровного фона — фактура без визуального шума. */
+private fun DrawScope.drawTexture(palette: List<Color>) {
+    drawRect(Brush.linearGradient(listOf(palette[1], palette[0])))
+
+    val ink = Color.White.copy(alpha = 0.14f)
+    val step = size.minDimension / 9f
+    val stroke = size.minDimension * 0.02f
+
+    // Сетка под 45° — на маленьком размере читается как приятная фактура
+    rotate(degrees = 45f) {
+        var x = -size.width
+        while (x < size.width * 2) {
+            drawLine(ink, Offset(x, -size.height), Offset(x, size.height * 2), strokeWidth = stroke)
             x += step
         }
-        y += step
-        row++
-    }
-}
-
-private fun DrawScope.drawStripes() {
-    val w = size.minDimension * 0.10f
-    val gap = w * 2.1f
-    var x = -size.height
-    while (x < size.width + size.height) {
-        // Диагональные полосы: сдвигаем верх и низ, получаем наклон 45°
-        val path = Path().apply {
-            moveTo(x, size.height)
-            lineTo(x + size.height, 0f)
-            lineTo(x + size.height + w, 0f)
-            lineTo(x + w, size.height)
-            close()
+        var y = -size.height
+        while (y < size.height * 2) {
+            drawLine(ink, Offset(-size.width, y), Offset(size.width * 2, y), strokeWidth = stroke)
+            y += step
         }
-        drawPath(path, Ink)
-        x += gap
-    }
-}
-
-private fun DrawScope.drawBlocks() {
-    val half = size.minDimension / 2f
-    // Шахматка из двух четвертей — простой и хорошо узнаваемый рисунок
-    drawRect(color = Ink, topLeft = Offset(0f, 0f), size = Size(half, half))
-    drawRect(color = Ink, topLeft = Offset(half, half), size = Size(half, half))
-}
-
-private fun DrawScope.drawBurst() {
-    val rays = 10
-    val radius = size.minDimension
-    repeat(rays) { i ->
-        val start = (2.0 * Math.PI * i / rays)
-        val end = start + (Math.PI / rays)
-        val path = Path().apply {
-            moveTo(center.x, center.y)
-            lineTo(
-                center.x + (radius * kotlin.math.cos(start)).toFloat(),
-                center.y + (radius * kotlin.math.sin(start)).toFloat(),
-            )
-            lineTo(
-                center.x + (radius * kotlin.math.cos(end)).toFloat(),
-                center.y + (radius * kotlin.math.sin(end)).toFloat(),
-            )
-            close()
-        }
-        drawPath(path, Ink)
     }
 }

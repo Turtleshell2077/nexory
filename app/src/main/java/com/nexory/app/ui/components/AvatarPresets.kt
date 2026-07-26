@@ -3,100 +3,104 @@ package com.nexory.app.ui.components
 import androidx.compose.ui.graphics.Color
 
 /**
- * Готовые аватары, которые пользователь выбирает вместо фотографии.
+ * Шаблоны аватара-заглушки, которые пользователь выбирает вместо фотографии.
  *
  * Формат хранения — строка в поле `avatar_url`:
- *   `preset:<style>:<variant>`   например `preset:rings:2`
- *   `preset:<N>`                 старый формат, поддерживается для совместимости
- *                                (у уже выбравших пользователей он сохранён)
+ *   `preset:<style>:<variant>`   например `preset:duotone:5`
+ *   `preset:<N>`                 самый первый формат, трактуется как градиент
  *
- * Благодаря такому хранению не понадобилось ни новое поле в API, ни миграция БД:
- * все экраны уже передают avatar_url в [UserAvatar], а он сам решает, рисовать
- * картинку или сгенерированный аватар.
+ * Такое хранение не потребовало ни нового поля в API, ни миграции БД: все экраны
+ * уже передают avatar_url в [UserAvatar], а он решает, рисовать фото или шаблон.
  *
- * Идентификаторы стилей и порядок вариантов менять нельзя — они уже у пользователей.
+ * Почему выбраны именно эти пять шаблонов: каждый даёт свой визуальный «характер»
+ * и при этом читается и как иконка 40 dp в списке, и как аватар 100 dp в профиле.
+ * Все построены на одной палитре, поэтому в приложении они смотрятся как одна
+ * семья, а не как случайный набор.
+ *
+ * Идентификаторы стилей менять нельзя — они уже сохранены у пользователей.
  */
 object AvatarPresets {
 
     private const val PREFIX = "preset:"
 
-    /** Стиль аватара: базовый градиент плюс пять узорных. */
-    enum class Style(val id: String, val title: String) {
-        GRADIENT("grad",   "Градиент"),
-        RINGS   ("rings",  "Кольца"),
-        DOTS    ("dots",   "Точки"),
-        STRIPES ("stripes","Полосы"),
-        BLOCKS  ("blocks", "Блоки"),
-        BURST   ("burst",  "Лучи"),
+    enum class Style(val id: String, val title: String, val description: String) {
+        /** Плавный переход трёх оттенков — спокойный вариант «по умолчанию». */
+        GRADIENT("grad", "Градиент", "Плавный переход цветов"),
+
+        /** Крупные инициалы на диагональном двухтоновом фоне — глубже плоской заливки. */
+        DUOTONE("duotone", "Дуотон", "Крупные инициалы на двух оттенках"),
+
+        /** Абстрактные фигуры, расставленные детерминированно по id пользователя. */
+        GEOMETRIC("geo", "Геометрия", "Абстрактный узор, уникальный для вас"),
+
+        /** Мягкие перетекающие формы — «органика». */
+        WAVES("waves", "Волны", "Мягкие перетекающие формы"),
+
+        /** Тонкая сетка поверх однотонного фона — фактура без шума. */
+        TEXTURE("texture", "Текстура", "Тонкий узор на ровном фоне"),
     }
 
-    /** Выбранный аватар: стиль + номер цветового варианта внутри стиля. */
     data class Selection(val style: Style, val variant: Int)
 
     /**
-     * Цветовые пары для вариантов. Один и тот же набор используется всеми стилями —
-     * так палитра приложения остаётся цельной, а различаются аватары рисунком.
+     * Двенадцать палитр. Каждая — три опорных цвета: тёмный, основной и светлый.
+     * Три точки вместо двух дают градиенту глубину, а остальным шаблонам —
+     * достаточный контраст между фоном и рисунком.
+     * Все проверены на читаемость белых инициалов поверх.
      */
     val palettes: List<List<Color>> = listOf(
-        listOf(Color(0xFF6D5DF6), Color(0xFF4A90E2)), // сине-фиолетовый
-        listOf(Color(0xFFEE5A9E), Color(0xFFF7797D)), // розово-коралловый
-        listOf(Color(0xFF11998E), Color(0xFF38EF7D)), // изумрудный
-        listOf(Color(0xFFF7971E), Color(0xFFFFD200)), // золотой
-        listOf(Color(0xFF667EEA), Color(0xFF764BA2)), // индиго
-        listOf(Color(0xFFFF6A88), Color(0xFFFF99AC)), // малиновый
-        listOf(Color(0xFF00C6FB), Color(0xFF005BEA)), // голубой
-        listOf(Color(0xFFF953C6), Color(0xFFB91D73)), // маджента
-        listOf(Color(0xFF43E97B), Color(0xFF38F9D7)), // мятный
-        listOf(Color(0xFFFA709A), Color(0xFFFEE140)), // закатный
-        listOf(Color(0xFF30CFD0), Color(0xFF330867)), // морская глубина
-        listOf(Color(0xFFFF8177), Color(0xFFB12A5B)), // терракотовый
+        listOf(Color(0xFF3A1C71), Color(0xFF5B62F0), Color(0xFF8AB6F9)), // индиго
+        listOf(Color(0xFF8E1F4B), Color(0xFFEE5A9E), Color(0xFFFFA9C9)), // фуксия
+        listOf(Color(0xFF0B4F4A), Color(0xFF11998E), Color(0xFF57E8B0)), // изумруд
+        listOf(Color(0xFF8A4B08), Color(0xFFF7971E), Color(0xFFFFD86F)), // янтарь
+        listOf(Color(0xFF2B1055), Color(0xFF7B4FE0), Color(0xFFB79CFF)), // аметист
+        listOf(Color(0xFF8C2F39), Color(0xFFFF6A88), Color(0xFFFFB3C1)), // коралл
+        listOf(Color(0xFF003B73), Color(0xFF0080C6), Color(0xFF66C6FF)), // океан
+        listOf(Color(0xFF5B1865), Color(0xFFB93FBF), Color(0xFFF39BFF)), // орхидея
+        listOf(Color(0xFF0F5132), Color(0xFF2FA35C), Color(0xFF8FE3AC)), // мох
+        listOf(Color(0xFF7A3B1F), Color(0xFFE0703C), Color(0xFFFFB08A)), // терракота
+        listOf(Color(0xFF0D3B4C), Color(0xFF1C8C9E), Color(0xFF7FD9E3)), // бирюза
+        listOf(Color(0xFF37474F), Color(0xFF62808F), Color(0xFFAFC4CE)), // графит
     )
 
     val variantCount: Int get() = palettes.size
 
-    /** Строка для сохранения в avatar_url. */
     fun toUrl(style: Style, variant: Int): String =
         "$PREFIX${style.id}:${variant.coerceIn(0, palettes.lastIndex)}"
 
-    /** Это выбранный аватар, а не ссылка на файл? */
     fun isPreset(url: String?): Boolean = url != null && url.startsWith(PREFIX)
 
     /**
-     * Разбирает avatar_url в [Selection].
-     * Понимает и новый формат `preset:style:variant`, и старый `preset:N`
-     * (он трактуется как градиент с этим номером варианта).
-     * Некорректные значения приводятся к валидным, чтобы старые данные
-     * не ломали отрисовку.
+     * Разбирает avatar_url. Неизвестный стиль (например, из более старой версии
+     * приложения) не ломает отрисовку — откатываемся к градиенту.
      */
     fun parse(url: String?): Selection? {
         if (!isPreset(url)) return null
-        val body = url!!.removePrefix(PREFIX)
-        val parts = body.split(":")
+        val parts = url!!.removePrefix(PREFIX).split(":")
         return if (parts.size >= 2) {
             val style = Style.entries.firstOrNull { it.id == parts[0] } ?: Style.GRADIENT
-            val variant = parts[1].toIntOrNull() ?: 0
-            Selection(style, variant.coerceIn(0, palettes.lastIndex))
+            Selection(style, (parts[1].toIntOrNull() ?: 0).coerceIn(0, palettes.lastIndex))
         } else {
-            // Старый формат: только номер варианта, стиль — градиент
-            val variant = parts[0].toIntOrNull() ?: 0
-            Selection(Style.GRADIENT, variant.coerceIn(0, palettes.lastIndex))
+            Selection(Style.GRADIENT, (parts[0].toIntOrNull() ?: 0).coerceIn(0, palettes.lastIndex))
         }
     }
 
     fun paletteAt(variant: Int): List<Color> = palettes[variant.coerceIn(0, palettes.lastIndex)]
 
     /**
-     * Аватар по умолчанию, когда ни фото, ни выбранного варианта нет:
-     * цвет выводится детерминированно из ключа (обычно id пользователя),
-     * поэтому у каждого он свой и не меняется от запуска к запуску.
+     * Аватар по умолчанию, когда ни фото, ни выбранного шаблона нет.
+     * Цвет выводится из ключа (обычно id пользователя): выглядит «случайным»,
+     * но у конкретного человека всегда один и тот же.
      */
-    fun defaultSelectionForKey(key: String): Selection {
+    fun defaultSelectionForKey(key: String): Selection =
+        Selection(Style.GRADIENT, hashOf(key) % palettes.size)
+
+    /** Стабильный неотрицательный хэш строки — используется и для узоров. */
+    fun hashOf(key: String): Int {
         val h = key.fold(0) { acc, c -> acc * 31 + c.code }
-        val idx = ((h % palettes.size) + palettes.size) % palettes.size
-        return Selection(Style.GRADIENT, idx)
+        return if (h < 0) -h else h
     }
 
-    /** Инициалы: одна буква из имени или две, если указаны имя и фамилия. */
     fun initialsOf(name: String?): String {
         val n = name?.trim().orEmpty()
         if (n.isEmpty()) return "?"

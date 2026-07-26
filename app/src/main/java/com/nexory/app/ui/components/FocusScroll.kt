@@ -4,8 +4,11 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.onFocusEvent
@@ -32,11 +35,21 @@ import kotlinx.coroutines.launch
 fun Modifier.scrollOnFocus(): Modifier = composed {
     val requester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
+    // Помним предыдущее состояние фокуса: прокручивать нужно только в момент,
+    // когда поле его ПОЛУЧАЕТ по действию пользователя.
+    //
+    // Без этой проверки onFocusEvent срабатывал и при обычной рекомпозиции —
+    // например, после смены аватара, когда поля пересоздавались по ключу
+    // remember(state.user). Уже сфокусированное поле повторно просило показать
+    // себя, и экран самопроизвольно прыгал вверх.
+    var wasFocused by remember { mutableStateOf(false) }
 
     this
         .bringIntoViewRequester(requester)
         .onFocusEvent { state ->
-            if (state.isFocused) {
+            val gainedFocus = state.isFocused && !wasFocused
+            wasFocused = state.isFocused
+            if (gainedFocus) {
                 scope.launch {
                     // Ждём анимацию появления клавиатуры, иначе прокрутим не туда
                     delay(250)
