@@ -33,6 +33,8 @@ data class UserDto(
     val country:    String?     = null,
     val city:       String?     = null,
     @SerializedName("display_name") val displayName: String? = null,
+    /** Короткий статус — показывается на профиле сразу под аватаром. */
+    val status:     String?     = null,
     val sports:     String?     = null,   // через запятую: "Футбол, Бег"
     @SerializedName("looking_for")  val lookingFor:  String? = null,
     @SerializedName("activity")     val activity:    String? = null,

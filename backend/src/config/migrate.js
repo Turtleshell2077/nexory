@@ -17,6 +17,7 @@ async function migrate() {
         '010_notification_prefs.sql',
         '011_event_metro.sql',
         '012_username_unique_ci.sql',
+        '013_user_status.sql',
     ];
 
     for (const file of migrations) {

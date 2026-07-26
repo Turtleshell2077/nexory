@@ -30,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.nexory.app.ui.components.nexoryTextFieldColors
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -59,6 +60,7 @@ fun EditProfileScreen(
     var username    by remember(state.user) { mutableStateOf(state.user?.username ?: "") }
     var displayName by remember(state.user) { mutableStateOf(state.user?.displayName ?: "") }
     var bio         by remember(state.user) { mutableStateOf(state.user?.bio ?: "") }
+    var status      by remember(state.user) { mutableStateOf(state.user?.status ?: "") }
     var avatarUrl   by remember(state.user) { mutableStateOf(state.user?.avatarUrl ?: "") }
     var age         by remember(state.user) { mutableStateOf(state.user?.age?.toString() ?: "") }
     var city        by remember(state.user) { mutableStateOf(state.user?.city ?: "") }
@@ -129,6 +131,7 @@ fun EditProfileScreen(
             username    = username,
             displayName = displayName,
             bio         = bio,
+            status      = status,
             avatarUrl   = avatarUrl,
             age         = age.toIntOrNull(),
             city        = city,
@@ -243,6 +246,14 @@ fun EditProfileScreen(
 
             ProfileLabel("Имя")
             ProfileField(value = displayName, onValueChange = { displayName = it }, placeholder = "Как тебя зовут")
+
+            // Короткая строка — показывается на профиле сразу под аватаром
+            ProfileLabel("Статус")
+            ProfileField(
+                value = status,
+                onValueChange = { if (it.length <= 120) status = it },
+                placeholder = "Коротко о себе — видно под аватаром",
+            )
 
             ProfileLabel("О себе")
             ProfileField(value = bio, onValueChange = { bio = it }, placeholder = "Расскажи о себе и где живёшь", maxLines = 4)
@@ -556,7 +567,8 @@ private fun ProfileField(
     OutlinedTextField(
         value           = value,
         onValueChange   = onValueChange,
-        modifier        = Modifier.fillMaxWidth(),
+        // scrollOnFocus — поле само поднимается над клавиатурой при фокусе
+        modifier        = Modifier.fillMaxWidth().scrollOnFocus(),
         placeholder     = { Text(placeholder, color = NexoryColors.TextSecondary) },
         maxLines        = maxLines,
         singleLine      = maxLines == 1,

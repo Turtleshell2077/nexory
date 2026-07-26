@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.nexory.app.navigation.Screen
@@ -42,7 +43,16 @@ fun EventDetailScreen(
     var showPriceInfo by remember { mutableStateOf(false) }
     var ownerMenu by remember { mutableStateOf(false) }
     var showParticipants by remember { mutableStateOf(false) }
-    LaunchedEffect(eventId) { viewModel.loadEvent(eventId) }
+    // Перезагружаем при каждом возвращении на экран, а не только при смене eventId.
+    // Иначе после редактирования мероприятия (в том числе смены обложки) сюда
+    // возвращаешься с тем же eventId, LaunchedEffect не срабатывает — и на экране
+    // остаются старые данные, включая прежнее фото.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(eventId, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            viewModel.loadEvent(eventId)
+        }
+    }
 
     // Переход в личный чат с организатором, когда он создан
     LaunchedEffect(uiState.openDirectChatId) {

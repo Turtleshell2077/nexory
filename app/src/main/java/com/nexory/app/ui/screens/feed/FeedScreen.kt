@@ -190,6 +190,12 @@ fun FeedScreen(
                     Spacer(Modifier.height(16.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Увлечения", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f))
+                        // Очистить только увлечения, не сбрасывая остальные фильтры
+                        if (uiState.selectedInterests.isNotEmpty()) {
+                            TextButton(onClick = { viewModel.clearInterests() }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                                Text("Очистить", color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                            }
+                        }
                         if (uiState.myInterests.isNotEmpty()) {
                             TextButton(onClick = { viewModel.useMyProfileInterests() }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
                                 Icon(Icons.Default.Person, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(15.dp))

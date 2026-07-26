@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.nexory.app.ui.components.nexoryTextFieldColors
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import androidx.compose.material3.ExperimentalMaterial3Api
 import kotlinx.coroutines.launch
@@ -540,7 +541,8 @@ fun PlainField(
     OutlinedTextField(
         value           = value,
         onValueChange   = onValueChange,
-        modifier        = Modifier.fillMaxWidth(),
+        // scrollOnFocus — поле само поднимается над клавиатурой при фокусе
+        modifier        = Modifier.fillMaxWidth().scrollOnFocus(),
         placeholder     = { Text(placeholder, color = NexoryColors.TextSecondary) },
         maxLines        = maxLines,
         singleLine      = maxLines == 1,

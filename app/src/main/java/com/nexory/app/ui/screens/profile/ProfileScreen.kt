@@ -53,6 +53,12 @@ fun ProfileScreen(
     var showAvatarPicker by remember { mutableStateOf(false) }
     var showAvatarRect by remember { mutableStateOf(false) }   // прямоугольник (потянуть вниз)
 
+    // Настоящая фотография (а не выбранный вариант оформления). Полноэкранный
+    // просмотр имеет смысл только для неё.
+    val hasRealPhoto = uiState.user?.avatarUrl.let {
+        !it.isNullOrBlank() && !com.nexory.app.ui.components.AvatarPresets.isPreset(it)
+    }
+
     val cropAvatar = com.nexory.app.ui.components.rememberImageCropper(circle = true) { cropped ->
         viewModel.uploadAvatar(cropped)
     }
@@ -105,7 +111,7 @@ fun ProfileScreen(
                     .pointerInput(uiState.user?.avatarUrl) {
                         detectVerticalDragGestures(
                             onDragEnd = {
-                                if (headerDrag > 60f && uiState.user?.avatarUrl != null) showAvatarRect = true
+                                if (headerDrag > 60f && hasRealPhoto) showAvatarRect = true
                                 headerDrag = 0f
                             },
                         ) { _, dragAmount -> headerDrag += dragAmount }
@@ -124,7 +130,10 @@ fun ProfileScreen(
                             name = uiState.user?.displayName?.takeIf { it.isNotBlank() } ?: uiState.user?.username,
                             seed = uiState.user?.id,
                             size = 88.dp,
-                            modifier = Modifier.clickable { showAvatarFull = true },   // тап → открыть аватар
+                            // Открываем полноэкранно только настоящее фото: у выбранного
+                            // варианта оформления открывать нечего — раньше это давало
+                            // чёрный экран, т.к. Coil не мог загрузить "preset:N" как URL
+                            modifier = Modifier.clickable(enabled = hasRealPhoto) { showAvatarFull = true },
                         )
                         if (uiState.uploadingAvatar) {
                             Box(
@@ -177,12 +186,15 @@ fun ProfileScreen(
                             color    = NexoryColors.TextSecondary,
                         )
                     }
-                    uiState.user?.bio?.let {
+                    // Под аватаром показываем короткий СТАТУС.
+                    // «О себе» (bio) переехало вниз блока информации, после email.
+                    uiState.user?.status?.takeIf { it.isNotBlank() }?.let {
                         Text(
                             text     = it,
                             fontSize = 13.sp,
                             color    = NexoryColors.TextSecondary,
-                            modifier = Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.padding(top = 6.dp, start = 32.dp, end = 32.dp),
                         )
                     }
                 }
@@ -216,7 +228,8 @@ fun ProfileScreen(
             val user = uiState.user
             if (user != null) {
                 val hasBasics  = !user.city.isNullOrBlank() || user.age != null ||
-                    !user.phone.isNullOrBlank() || !user.email.isNullOrBlank()
+                    !user.phone.isNullOrBlank() || !user.email.isNullOrBlank() ||
+                    !user.bio.isNullOrBlank()
                 val interests  = user.sports?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
 
                 if (hasBasics) {
@@ -234,6 +247,12 @@ fun ProfileScreen(
                         user.age?.let { InfoTextRow("Возраст", "$it") }
                         user.phone?.takeIf { it.isNotBlank() }?.let { InfoTextRow("Телефон", it) }
                         user.email?.takeIf { it.isNotBlank() }?.let { InfoTextRow("Email", it) }
+                        // «О себе» — в самом низу блока, после email (перенесено из-под аватара)
+                        user.bio?.takeIf { it.isNotBlank() }?.let {
+                            HorizontalDivider(color = NexoryColors.SurfaceMid, thickness = 0.5.dp)
+                            Text("О себе", fontSize = 12.sp, color = NexoryColors.TextSecondary)
+                            Text(it, fontSize = 14.sp, color = NexoryColors.TextPrimary, lineHeight = 20.sp)
+                        }
                     }
                 }
 
@@ -310,7 +329,7 @@ fun ProfileScreen(
     }
 
     // Аватар крупно, круглый (тап) — на тёмном фоне, чтобы видны границы
-    if (showAvatarFull && uiState.user?.avatarUrl != null) {
+    if (showAvatarFull && hasRealPhoto) {
         Dialog(onDismissRequest = { showAvatarFull = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f)).clickable { showAvatarFull = false },
@@ -325,7 +344,7 @@ fun ProfileScreen(
     }
 
     // Аватар во весь размер, прямоугольный (потянуть вниз)
-    if (showAvatarRect && uiState.user?.avatarUrl != null) {
+    if (showAvatarRect && hasRealPhoto) {
         Dialog(onDismissRequest = { showAvatarRect = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f)).clickable { showAvatarRect = false },

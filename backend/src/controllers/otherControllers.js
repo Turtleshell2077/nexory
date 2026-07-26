@@ -101,7 +101,7 @@ const getProfile = async (req, res) => {
     const isSelf = userId === viewerId;
     try {
         const userRes = await query(
-            `SELECT id, username, email, phone, avatar_url, bio, display_name,
+            `SELECT id, username, email, phone, avatar_url, bio, display_name, status,
                     age, country, city, sports, looking_for, activity,
                     notifications_enabled, contacts_public, profile_visibility, role, created_at,
                     notify_messages, notify_friend_events, notify_interest_events, is_verified
@@ -162,7 +162,7 @@ const getProfile = async (req, res) => {
 const updateProfile = async (req, res) => {
     const userId = req.user.id;
     const {
-        username, bio, avatar_url, display_name,
+        username, bio, avatar_url, display_name, status,
         age, country, city, sports, looking_for, activity, notifications_enabled,
         phone, contacts_public, profile_visibility,
         notify_messages, notify_friend_events, notify_interest_events,
@@ -216,12 +216,17 @@ const updateProfile = async (req, res) => {
                 notify_messages        = COALESCE($15::boolean, notify_messages),
                 notify_friend_events   = COALESCE($16::boolean, notify_friend_events),
                 notify_interest_events = COALESCE($17::boolean, notify_interest_events),
+                status                 = COALESCE($19, status),
                 updated_at             = NOW()
             WHERE id = $18
-            RETURNING id, username, bio, avatar_url, display_name,
+            RETURNING id, username, bio, avatar_url, display_name, status,
                       age, country, city, sports, looking_for, activity,
                       notifications_enabled, contacts_public, profile_visibility, phone, email, role, created_at,
-                      notify_messages, notify_friend_events, notify_interest_events
+                      notify_messages, notify_friend_events, notify_interest_events,
+                      -- is_verified обязателен: без него клиент получает DTO с дефолтом
+                      -- false и после ЛЮБОГО изменения профиля (например, смены аватара)
+                      -- снова показывает «подтвердите почту», хотя почта подтверждена.
+                      is_verified
         `, [
             username    || null,
             bio         || null,
@@ -241,6 +246,9 @@ const updateProfile = async (req, res) => {
             boolOrNull(notify_friend_events),
             boolOrNull(notify_interest_events),
             userId,
+            // $19 — статус. Добавлен в конец, чтобы не сдвигать нумерацию
+            // существующих параметров. Пустая строка означает «очистить».
+            status !== undefined ? (status || '') : null,
         ]);
 
         res.json({ user: result.rows[0] });

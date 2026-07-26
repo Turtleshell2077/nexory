@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -67,7 +68,8 @@ fun NexoryField(
     OutlinedTextField(
         value           = value,
         onValueChange   = onValueChange,
-        modifier        = Modifier.fillMaxWidth(),
+        // scrollOnFocus — поле само поднимается над клавиатурой при фокусе
+        modifier        = Modifier.fillMaxWidth().scrollOnFocus(),
         label           = { Text(label) },
         leadingIcon     = { Icon(icon, null) },
         maxLines        = maxLines,
@@ -121,9 +123,9 @@ fun UserAvatar(
     size:     Dp,
     modifier: Modifier = Modifier,
 ) {
-    val presetIndex = AvatarPresets.indexOf(url)
+    val selection = AvatarPresets.parse(url)
 
-    if (!url.isNullOrBlank() && presetIndex == null) {
+    if (!url.isNullOrBlank() && selection == null) {
         // Настоящая фотография
         AsyncImage(
             model = url,
@@ -133,27 +135,18 @@ fun UserAvatar(
         )
     } else {
         val key = (seed ?: name ?: "?")
-        // Градиент и инициалы детерминированы — считаем один раз, а не на каждую
+        // Выбор и инициалы детерминированы — считаем один раз, а не на каждую
         // рекомпозицию (аватары рисуются в длинных списках).
-        val gradient = remember(key, presetIndex) {
-            if (presetIndex != null) AvatarPresets.gradientAt(presetIndex)
-            else AvatarPresets.gradientForKey(key)
+        val resolved = remember(key, selection) {
+            selection ?: AvatarPresets.defaultSelectionForKey(key)
         }
         val initials = remember(name) { AvatarPresets.initialsOf(name) }
-        Box(
-            modifier = modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(gradient)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = initials,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = (size.value * 0.38f).sp,
-            )
-        }
+        GeneratedAvatar(
+            selection = resolved,
+            initials = initials,
+            size = size,
+            modifier = modifier,
+        )
     }
 }
 
@@ -177,42 +170,74 @@ fun MetroAutocompleteField(
     val showList = suggestions.isNotEmpty() &&
             !(suggestions.size == 1 && suggestions[0] == value)
 
+    // Ширину поля запоминаем, чтобы всплывающий список был ровно по нему
+    var fieldWidthPx by remember { mutableStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Список подсказок располагается НАД полем ввода.
-        // Причина: поле часто находится в нижней половине экрана, и при открытой
-        // клавиатуре список, показанный снизу, полностью уходил под неё —
-        // выбрать станцию было невозможно. Сверху он всегда остаётся видимым.
+        // Список подсказок — всплывающее окно НАД полем ввода.
+        //
+        // Почему Popup, а не элемент в Column: обычный элемент занимает место в
+        // разметке и толкает поле вниз — под клавиатуру. Popup рисуется поверх и
+        // на разметку не влияет, поэтому и поле с набранным текстом, и клавиатура
+        // остаются на месте, а список просто «выезжает» над полем.
         if (showList) {
-            // Высота ограничена и список прокручивается: при 8 подсказках он вырастал
-            // примерно на 350.dp и выталкивал само поле ввода за пределы экрана —
-            // пользователь не видел, что печатает. Теперь видно максимум ~4 строки,
-            // остальные доступны прокруткой.
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 176.dp)
-                    .background(NexoryColors.SurfaceMid, RoundedCornerShape(12.dp))
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                suggestions.forEach { station ->
-                    Text(
-                        station,
-                        color = NexoryColors.TextPrimary,
-                        fontSize = 14.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showSuggestions = false; onChange(station) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
+            // Позиционер поднимает список ровно на его собственную высоту над полем.
+            // Если сверху не хватает места, прижимаем к верху экрана, а не за него.
+            val abovePositionProvider = remember {
+                object : androidx.compose.ui.window.PopupPositionProvider {
+                    override fun calculatePosition(
+                        anchorBounds: androidx.compose.ui.unit.IntRect,
+                        windowSize: androidx.compose.ui.unit.IntSize,
+                        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                        popupContentSize: androidx.compose.ui.unit.IntSize,
+                    ): androidx.compose.ui.unit.IntOffset {
+                        val gap = 8
+                        val y = (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(0)
+                        return androidx.compose.ui.unit.IntOffset(anchorBounds.left, y)
+                    }
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            androidx.compose.ui.window.Popup(
+                popupPositionProvider = abovePositionProvider,
+                // focusable = false — клавиатура не должна закрываться при показе списка
+                properties = androidx.compose.ui.window.PopupProperties(focusable = false),
+                onDismissRequest = { showSuggestions = false },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(with(density) { fieldWidthPx.toDp() })
+                        // Ограничение высоты: иначе длинный список перекрывает
+                        // пол-экрана. Видно ~4 строки, остальные — прокруткой.
+                        .heightIn(max = 176.dp)
+                        .background(NexoryColors.SurfaceMid, RoundedCornerShape(12.dp)),
+                ) {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        suggestions.forEach { station ->
+                            Text(
+                                station,
+                                color = NexoryColors.TextPrimary,
+                                fontSize = 14.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showSuggestions = false; onChange(station) }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         OutlinedTextField(
             value = value,
             onValueChange = { showSuggestions = true; onChange(it) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                // Запоминаем ширину, чтобы всплывающий список был ровно по полю
+                .onSizeChanged { fieldWidthPx = it.width }
+                // Поле само поднимается над клавиатурой при фокусе
+                .scrollOnFocus(),
             placeholder = { Text(label, color = NexoryColors.TextSecondary) },
             leadingIcon = { Icon(Icons.Default.Place, null) },
             trailingIcon = {

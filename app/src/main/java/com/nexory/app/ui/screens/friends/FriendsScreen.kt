@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -149,10 +150,19 @@ private fun FriendsTab(
 ) {
     val focusRequester = remember { FocusRequester() }
 
-    // Когда строка поиска раскрылась — сразу ставим в неё курсор
+    // Фокус ставим ТОЛЬКО в момент, когда пользователь сам раскрыл поиск.
+    //
+    // Раньше эффект зависел от state.searchOpen: при возврате на вкладку «Друзья»
+    // (поиск оставался раскрытым) он срабатывал заново и без спроса поднимал
+    // клавиатуру. Флаг сбрасывается при закрытии поиска, поэтому повторное
+    // открытие снова даёт фокус — как и ожидается.
+    var focusConsumed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.searchOpen) {
-        if (state.searchOpen) {
+        if (state.searchOpen && !focusConsumed) {
+            focusConsumed = true
             runCatching { focusRequester.requestFocus() }
+        } else if (!state.searchOpen) {
+            focusConsumed = false
         }
     }
 
@@ -220,12 +230,21 @@ private fun FriendsTab(
                     placeholder = { Text("Введите ник", color = NexoryColors.TextSecondary) },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = NexoryColors.TextSecondary) },
                     trailingIcon = {
-                        if (state.isSearching) {
-                            CircularProgressIndicator(
+                        when {
+                            state.isSearching -> CircularProgressIndicator(
                                 color = NexoryColors.PrimaryBlue,
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
                             )
+                            // Крестик очищает текст, но НЕ закрывает поиск —
+                            // закрытие висит на отдельной кнопке справа от поля
+                            state.searchQuery.isNotEmpty() -> IconButton(onClick = { onSearch("") }) {
+                                Icon(
+                                    Icons.Default.Cancel, "Очистить",
+                                    tint = NexoryColors.TextSecondary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                     },
                     singleLine = true,

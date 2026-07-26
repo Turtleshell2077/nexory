@@ -63,6 +63,7 @@ class EditProfileViewModel @Inject constructor(
         username:    String,
         displayName: String,
         bio:         String,
+        status:      String,
         avatarUrl:   String,
         age:         Int?,
         city:        String,
@@ -76,6 +77,7 @@ class EditProfileViewModel @Inject constructor(
                     if (username.isNotBlank())    put("username",     username)
                     if (displayName.isNotBlank()) put("display_name", displayName)
                     put("bio",        bio)            // допускаем очистку
+                    put("status",     status)         // допускаем очистку
                     // Отправляем всегда, включая пустую строку: она означает
                     // «удалить фото». Раньше пустое значение отсекалось, и убрать
                     // аватар через редактирование профиля было невозможно.

@@ -3,20 +3,41 @@ package com.nexory.app.ui.components
 import androidx.compose.ui.graphics.Color
 
 /**
- * Готовые варианты аватара, которые пользователь может выбрать вместо фотографии.
+ * Готовые аватары, которые пользователь выбирает вместо фотографии.
  *
- * Как это хранится: выбранный вариант записывается в поле `avatar_url` строкой
- * вида `preset:3`. Так не потребовалась ни миграция БД, ни новое поле в API —
- * все экраны уже получают avatar_url и передают его в [UserAvatar], который сам
- * распознаёт этот формат и рисует градиент вместо загрузки картинки.
+ * Формат хранения — строка в поле `avatar_url`:
+ *   `preset:<style>:<variant>`   например `preset:rings:2`
+ *   `preset:<N>`                 старый формат, поддерживается для совместимости
+ *                                (у уже выбравших пользователей он сохранён)
  *
- * Значения индексов менять нельзя: они уже сохранены у пользователей.
- * Новые варианты добавляйте только в конец списка.
+ * Благодаря такому хранению не понадобилось ни новое поле в API, ни миграция БД:
+ * все экраны уже передают avatar_url в [UserAvatar], а он сам решает, рисовать
+ * картинку или сгенерированный аватар.
+ *
+ * Идентификаторы стилей и порядок вариантов менять нельзя — они уже у пользователей.
  */
 object AvatarPresets {
 
-    /** Пары цветов для градиента. Подобраны контрастными к белому тексту инициалов. */
-    val gradients: List<List<Color>> = listOf(
+    private const val PREFIX = "preset:"
+
+    /** Стиль аватара: базовый градиент плюс пять узорных. */
+    enum class Style(val id: String, val title: String) {
+        GRADIENT("grad",   "Градиент"),
+        RINGS   ("rings",  "Кольца"),
+        DOTS    ("dots",   "Точки"),
+        STRIPES ("stripes","Полосы"),
+        BLOCKS  ("blocks", "Блоки"),
+        BURST   ("burst",  "Лучи"),
+    }
+
+    /** Выбранный аватар: стиль + номер цветового варианта внутри стиля. */
+    data class Selection(val style: Style, val variant: Int)
+
+    /**
+     * Цветовые пары для вариантов. Один и тот же набор используется всеми стилями —
+     * так палитра приложения остаётся цельной, а различаются аватары рисунком.
+     */
+    val palettes: List<List<Color>> = listOf(
         listOf(Color(0xFF6D5DF6), Color(0xFF4A90E2)), // сине-фиолетовый
         listOf(Color(0xFFEE5A9E), Color(0xFFF7797D)), // розово-коралловый
         listOf(Color(0xFF11998E), Color(0xFF38EF7D)), // изумрудный
@@ -31,38 +52,48 @@ object AvatarPresets {
         listOf(Color(0xFFFF8177), Color(0xFFB12A5B)), // терракотовый
     )
 
-    /** Префикс, по которому [UserAvatar] отличает пресет от обычной ссылки на файл. */
-    private const val PREFIX = "preset:"
+    val variantCount: Int get() = palettes.size
 
     /** Строка для сохранения в avatar_url. */
-    fun toUrl(index: Int): String = "$PREFIX$index"
+    fun toUrl(style: Style, variant: Int): String =
+        "$PREFIX${style.id}:${variant.coerceIn(0, palettes.lastIndex)}"
 
-    /** Это выбранный пресет, а не ссылка на картинку? */
+    /** Это выбранный аватар, а не ссылка на файл? */
     fun isPreset(url: String?): Boolean = url != null && url.startsWith(PREFIX)
 
     /**
-     * Индекс пресета из строки avatar_url, либо null если это не пресет.
-     * Некорректные и вышедшие за границы значения приводим к валидному индексу,
-     * чтобы старое сохранённое значение не сломало отрисовку после сокращения списка.
+     * Разбирает avatar_url в [Selection].
+     * Понимает и новый формат `preset:style:variant`, и старый `preset:N`
+     * (он трактуется как градиент с этим номером варианта).
+     * Некорректные значения приводятся к валидным, чтобы старые данные
+     * не ломали отрисовку.
      */
-    fun indexOf(url: String?): Int? {
+    fun parse(url: String?): Selection? {
         if (!isPreset(url)) return null
-        val raw = url!!.removePrefix(PREFIX).toIntOrNull() ?: return 0
-        return raw.coerceIn(0, gradients.lastIndex)
+        val body = url!!.removePrefix(PREFIX)
+        val parts = body.split(":")
+        return if (parts.size >= 2) {
+            val style = Style.entries.firstOrNull { it.id == parts[0] } ?: Style.GRADIENT
+            val variant = parts[1].toIntOrNull() ?: 0
+            Selection(style, variant.coerceIn(0, palettes.lastIndex))
+        } else {
+            // Старый формат: только номер варианта, стиль — градиент
+            val variant = parts[0].toIntOrNull() ?: 0
+            Selection(Style.GRADIENT, variant.coerceIn(0, palettes.lastIndex))
+        }
     }
 
-    /** Градиент для пресета. */
-    fun gradientAt(index: Int): List<Color> = gradients[index.coerceIn(0, gradients.lastIndex)]
+    fun paletteAt(variant: Int): List<Color> = palettes[variant.coerceIn(0, palettes.lastIndex)]
 
     /**
-     * Градиент по умолчанию — детерминированно выводится из ключа (обычно id пользователя).
-     * Используется, когда фото нет и пресет не выбран: у каждого человека свой цвет,
-     * и он не меняется от запуска к запуску.
+     * Аватар по умолчанию, когда ни фото, ни выбранного варианта нет:
+     * цвет выводится детерминированно из ключа (обычно id пользователя),
+     * поэтому у каждого он свой и не меняется от запуска к запуску.
      */
-    fun gradientForKey(key: String): List<Color> {
+    fun defaultSelectionForKey(key: String): Selection {
         val h = key.fold(0) { acc, c -> acc * 31 + c.code }
-        val idx = ((h % gradients.size) + gradients.size) % gradients.size
-        return gradients[idx]
+        val idx = ((h % palettes.size) + palettes.size) % palettes.size
+        return Selection(Style.GRADIENT, idx)
     }
 
     /** Инициалы: одна буква из имени или две, если указаны имя и фамилия. */
