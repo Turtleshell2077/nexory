@@ -73,19 +73,23 @@ class EditProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
+                // Все поля, которые пользователь вправе стереть, отправляем ВСЕГДА,
+                // включая пустую строку: на сервере '' означает «очистить», а
+                // отсутствие поля — «не менять». Раньше пустые значения просто не
+                // попадали в запрос, поэтому стереть имя или возраст было нельзя:
+                // на странице профиля оставалось прежнее значение.
+                // Исключение — никнейм: пустым он быть не может.
                 val body = buildMap<String, String?> {
-                    if (username.isNotBlank())    put("username",     username)
-                    if (displayName.isNotBlank()) put("display_name", displayName)
-                    put("bio",        bio)            // допускаем очистку
-                    put("status",     status)         // допускаем очистку
-                    // Отправляем всегда, включая пустую строку: она означает
-                    // «удалить фото». Раньше пустое значение отсекалось, и убрать
-                    // аватар через редактирование профиля было невозможно.
-                    put("avatar_url", avatarUrl)
-                    if (age != null)              put("age",          age.toString())
-                    put("city",       city)
-                    put("sports",     interests)
-                    put("phone",      phone)
+                    if (username.isNotBlank()) put("username", username)
+                    put("display_name", displayName)
+                    put("bio",          bio)
+                    put("status",       status)
+                    // Пустая строка здесь означает «удалить фото»
+                    put("avatar_url",   avatarUrl)
+                    put("age",          age?.toString() ?: "")
+                    put("city",         city)
+                    put("sports",       interests)
+                    put("phone",        phone)
                 }
                 val response = api.updateProfile(body)
                 _state.update { it.copy(user = response.user, isLoading = false, isSaved = true) }

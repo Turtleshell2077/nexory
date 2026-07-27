@@ -61,14 +61,13 @@ fun ChatDetailScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { navController.navigate(Screen.ChatInfo.route(chatId)) },
                     ) {
-                        AsyncImage(
-                            model              = uiState.chatAvatarUrl,
-                            contentDescription = null,
-                            contentScale       = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(NexoryColors.SurfaceMid),
+                        // UserAvatar вместо голого AsyncImage: если фото нет,
+                        // рисуется градиент с инициалами, а не пустой серый круг
+                        com.nexory.app.ui.components.UserAvatar(
+                            url  = uiState.chatAvatarUrl,
+                            name = uiState.chatTitle,
+                            seed = chatId,
+                            size = 38.dp,
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
@@ -159,6 +158,7 @@ fun ChatDetailScreen(
             }
         }
     ) { padding ->
+        com.nexory.app.ui.components.ChatBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state          = listState,
             modifier       = Modifier
@@ -192,6 +192,7 @@ fun ChatDetailScreen(
                 MessageBubble(message = msg, isMyMessage = isMyMessage)
             }
         }
+        }
     }
 }
 
@@ -199,7 +200,10 @@ fun ChatDetailScreen(
 fun MessageBubble(message: MessageDto, isMyMessage: Boolean) {
     val alignment   = if (isMyMessage) Alignment.CenterEnd    else Alignment.CenterStart
     val bubbleColor = if (isMyMessage) NexoryColors.DeepBlue  else NexoryColors.SurfaceMid
-    val textColor   = NexoryColors.TextPrimary
+    // Свой пузырь всегда фирменного тёмно-индигового цвета, поэтому текст на нём
+    // белый в обеих темах. Раньше цвет брался из темы — и в светлом оформлении
+    // получался чёрный текст на тёмно-синем фоне, почти нечитаемый.
+    val textColor   = if (isMyMessage) Color.White else NexoryColors.TextPrimary
 
     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Column(
@@ -213,7 +217,8 @@ fun MessageBubble(message: MessageDto, isMyMessage: Boolean) {
                 Text(
                     text     = message.senderUsername,
                     fontSize = 11.sp,
-                    color    = NexoryColors.LightViolet,
+                    // Светлый фиолетовый теряется на белом фоне светлой темы
+                    color    = if (NexoryColors.isDark) NexoryColors.LightViolet else NexoryColors.Violet,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
                 )

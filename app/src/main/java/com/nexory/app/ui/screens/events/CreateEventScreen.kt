@@ -86,7 +86,14 @@ fun CreateEventScreen(
     var coverUri        by remember(eventId) { mutableStateOf<Uri?>(null) }   // превью
     var coverUrl        by remember(eventId) { mutableStateOf<String?>(null) } // загруженный URL
     var uploadingCover  by remember { mutableStateOf(false) }
+    // Поле ссылки на билет раскрывается кнопкой «+» — см. блок «Стоимость»
+    var ticketFieldShown by remember(eventId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    // Платное мероприятие — только когда сумма указана и больше нуля
+    val isPaid = price.toIntOrNull()?.let { it > 0 } == true
+    // Ссылку принимаем и без протокола: normalizeTicketUrl допишет https://
+    val ticketUrlValid = ticketUrl.isBlank() || isValidTicketUrl(ticketUrl)
 
     // Дата/время: ISO для бэкенда + человекочитаемое для UI
     var startsAtIso     by remember(eventId) { mutableStateOf("") }
@@ -110,6 +117,8 @@ fun CreateEventScreen(
                 ?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: ""
             priceDesc       = e.priceDescription ?: ""
             ticketUrl       = e.ticketUrl ?: ""
+            // Ссылка уже задана — показываем поле сразу, а не прячем за «+»
+            ticketFieldShown = !e.ticketUrl.isNullOrBlank()
             skillLevel      = e.skillLevel ?: ""
             metro           = e.metro ?: ""
             eventType       = e.eventType ?: ""
@@ -422,8 +431,9 @@ fun CreateEventScreen(
                 keyboardType = KeyboardType.Number,
                 isError = "price" in uiState.invalidFields,
             )
-            // Описание стоимости — только если цена задана
-            if (price.isNotBlank() && price != "0") {
+            // Всё, что относится к оплате, показываем только когда указана сумма:
+            // у бесплатного мероприятия эти поля не значат ничего и лишь удлиняют форму.
+            if (isPaid) {
                 FieldLabel("За что оплата")
                 PlainField(
                     value = priceDesc,
@@ -432,23 +442,59 @@ fun CreateEventScreen(
                     maxLines = 3,
                 )
 
-                // Ссылка на билет — только для платных мероприятий.
-                // Название выбрано разговорное: «Где купить билет» короче и понятнее,
-                // чем формальное «Ссылка на покупку билета».
-                FieldLabel("Где купить билет")
-                val ticketUrlValid = ticketUrl.isBlank() || isValidTicketUrl(ticketUrl)
-                PlainField(
-                    value = ticketUrl,
-                    onValueChange = { ticketUrl = it.trim() },
-                    placeholder = "https://... — необязательно",
-                    isError = !ticketUrlValid,
-                )
-                Text(
-                    if (!ticketUrlValid) "Ссылка должна начинаться с https:// или http://"
-                    else "Кнопка «Купить билет» появится на карточке мероприятия",
-                    color = if (!ticketUrlValid) NexoryColors.Error else NexoryColors.TextSecondary,
-                    fontSize = 12.sp,
-                )
+                // Ссылка на билет прячется за кнопкой «+»: она нужна далеко не всем
+                // организаторам, а пустое поле в форме читается как обязательное.
+                if (!ticketFieldShown) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(NexoryColors.SurfaceDark)
+                            .clickable { ticketFieldShown = true }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .background(NexoryColors.PrimaryBlue, androidx.compose.foundation.shape.CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Добавить ссылку на покупку", color = NexoryColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            Text("Сайт с билетами, форма записи или оплаты", color = NexoryColors.TextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FieldLabel("Где купить билет")
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "Убрать",
+                            color = NexoryColors.TextSecondary, fontSize = 12.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { ticketUrl = ""; ticketFieldShown = false }
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                    PlainField(
+                        value = ticketUrl,
+                        onValueChange = { ticketUrl = it.trim() },
+                        placeholder = "например, timepad.ru/event/123",
+                        isError = !ticketUrlValid || "ticketUrl" in uiState.invalidFields,
+                    )
+                    Text(
+                        if (!ticketUrlValid) "Похоже, это не ссылка на сайт. Пример: timepad.ru/event/123"
+                        else "Кнопка «Купить билет» появится на странице мероприятия. " +
+                            "Адрес можно вводить без https:// — допишем сами.",
+                        color = if (!ticketUrlValid) NexoryColors.Error else NexoryColors.TextSecondary,
+                        fontSize = 12.sp, lineHeight = 17.sp,
+                    )
+                }
             }
 
             // ---- Уровень ----
@@ -536,9 +582,8 @@ fun CreateEventScreen(
             // ---- Кнопка сохранения ----
             // Некорректная ссылка на билет блокирует сохранение — иначе сервер
             // вернёт 400, и пользователь не поймёт, из-за какого поля
-            val ticketOk = ticketUrl.isBlank() || isValidTicketUrl(ticketUrl)
             val canCreate = !uiState.isLoading && title.isNotBlank() &&
-                location.isNotBlank() && startsAtIso.isNotBlank() && ticketOk
+                location.isNotBlank() && startsAtIso.isNotBlank() && ticketUrlValid
             Button(
                 onClick = {
                     viewModel.save(
@@ -559,7 +604,7 @@ fun CreateEventScreen(
                         metro           = metro,
                         // Ссылку сохраняем только для платных мероприятий:
                         // если цену обнулили, старая ссылка должна уйти вместе с ней
-                        ticketUrl       = if (price.toIntOrNull()?.let { it > 0 } == true) ticketUrl.trim() else "",
+                        ticketUrl       = if (isPaid) normalizeTicketUrl(ticketUrl) else "",
                     )
                 },
                 modifier = Modifier.fillMaxWidth().height(54.dp),
@@ -585,13 +630,29 @@ fun CreateEventScreen(
     }
 }
 
+private val URL_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+/**
+ * Приводит ссылку к каноническому виду: «vk.com/club1» → «https://vk.com/club1».
+ *
+ * Люди вводят адрес так, как привыкли — без протокола. Раньше такая ссылка не
+ * проходила проверку, кнопка сохранения оставалась серой, и создать платное
+ * мероприятие было нельзя. Точно та же нормализация выполняется на сервере
+ * (backend/src/utils/url.js) — правила должны совпадать на обеих сторонах.
+ */
+fun normalizeTicketUrl(url: String): String {
+    val t = url.trim()
+    if (t.isEmpty()) return ""
+    return if (URL_SCHEME.containsMatchIn(t)) t else "https://$t"
+}
+
 /**
  * Проверка ссылки на билет перед отправкой.
- * Разрешаем только http/https: иначе из карточки мероприятия можно было бы
+ * Разрешаем только http/https: иначе с страницы мероприятия можно было бы
  * открыть произвольную схему (intent:, file:) — тот же список, что и на сервере.
  */
 fun isValidTicketUrl(url: String): Boolean {
-    val u = url.trim()
+    val u = normalizeTicketUrl(url)
     if (!u.startsWith("http://") && !u.startsWith("https://")) return false
     return try {
         val parsed = java.net.URL(u)

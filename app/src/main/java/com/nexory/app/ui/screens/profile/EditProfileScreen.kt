@@ -294,20 +294,19 @@ fun EditProfileScreen(
                 if (q.isBlank()) emptyList()
                 else INTERESTS.filter { it.contains(q, ignoreCase = true) && it !in interests }.take(6)
             }
-            com.nexory.app.ui.components.AutocompleteTextField(
-                value = interestQuery,
-                onValueChange = { interestQuery = it },
+            com.nexory.app.ui.components.InterestInputRow(
+                query = interestQuery,
+                onQueryChange = { interestQuery = it },
                 suggestions = interestSuggestions,
-                onSuggestionPick = { picked ->
+                onPick = { picked ->
                     if (picked !in interests) interests.add(picked)
                     interestQuery = ""
                 },
-                placeholder = "Начни вводить и выбери из списка",
-                allowCustomValue = true,
-                onCustomValueAdd = { custom ->
+                onAddCustom = { custom ->
                     if (interests.none { it.equals(custom, ignoreCase = true) }) interests.add(custom)
                     interestQuery = ""
                 },
+                placeholder = "Начни вводить увлечение",
             )
 
             // Выбранные увлечения чипами

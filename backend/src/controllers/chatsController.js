@@ -180,6 +180,12 @@ const getChatInfo = async (req, res) => {
                 CASE WHEN c.type = 'event' THEN (
                     SELECT title FROM events e WHERE e.id = c.event_id
                 ) END AS event_title,
+                -- Обложка мероприятия как запасной аватар чата. В списке чатов
+                -- (getMyChats) такой фоллбэк был, а здесь нет — из-за этого при
+                -- переходе внутрь чата фото пропадало и шапка становилась пустой.
+                CASE WHEN c.type = 'event' THEN (
+                    SELECT cover_url FROM events e WHERE e.id = c.event_id
+                ) END AS event_cover,
                 CASE WHEN c.type = 'direct' THEN (
                     SELECT json_build_object('id', u.id, 'username', u.username, 'avatar_url', u.avatar_url)
                     FROM chat_members cm2 JOIN users u ON u.id = cm2.user_id
@@ -193,7 +199,7 @@ const getChatInfo = async (req, res) => {
         const row = chatRes.rows[0];
         const title  = row.type === 'event' ? (row.event_title || 'Чат мероприятия')
                      : (row.peer?.username || 'Чат');
-        const avatar = row.avatar_url || row.peer?.avatar_url || null;
+        const avatar = row.avatar_url || row.peer?.avatar_url || row.event_cover || null;
 
         // Участники чата
         const membersRes = await query(`

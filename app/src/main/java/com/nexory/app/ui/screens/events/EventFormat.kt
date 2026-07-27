@@ -74,10 +74,16 @@ private fun plural(n: Long, one: String, few: String, many: String): String {
     }
 }
 
-/** Мероприятие уже прошло? Нужно, чтобы помечать карточки в ленте. */
-fun isEventFinished(startsAt: String?): Boolean {
-    val start = parse(startsAt) ?: return false
-    return start.toInstant().isBefore(java.time.Instant.now())
+/**
+ * Мероприятие уже прошло? Помечает карточки в ленте и шапку на экране мероприятия.
+ *
+ * Ориентируемся на время ОКОНЧАНИЯ, если оно указано: пока мероприятие идёт,
+ * называть его завершённым неверно — человек ещё может присоединиться. Если
+ * окончание не задано, остаётся время начала.
+ */
+fun isEventFinished(startsAt: String?, endsAt: String? = null): Boolean {
+    val finish = parse(endsAt) ?: parse(startsAt) ?: return false
+    return finish.toInstant().isBefore(java.time.Instant.now())
 }
 
 // "Бесплатно" или "500 ₽"

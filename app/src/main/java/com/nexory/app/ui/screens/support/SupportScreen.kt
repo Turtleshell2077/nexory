@@ -203,7 +203,8 @@ fun SupportScreen(
                 onValueChange = { body = it },
                 modifier      = Modifier
                     .fillMaxWidth()
-                    .height(160.dp),
+                    .height(160.dp)
+                    .scrollOnFocus(),
                 label         = { Text("Подробное описание *") },
                 leadingIcon   = { Icon(Icons.Default.Message, null) },
                 maxLines      = 8,

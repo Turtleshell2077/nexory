@@ -41,6 +41,7 @@ class CreateEventViewModel @Inject constructor(
         "max_participants" -> "maxParticipants"
         "price"            -> "price"
         "description"      -> "description"
+        "ticket_url"       -> "ticketUrl"
         else -> null
     }
 

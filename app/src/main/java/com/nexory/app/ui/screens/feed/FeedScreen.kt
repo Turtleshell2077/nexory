@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -42,6 +43,7 @@ import com.nexory.app.data.network.EventDto
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.components.NexoryBottomBar
 import com.nexory.app.ui.components.MetroAutocompleteField
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.screens.profile.INTERESTS
 import com.nexory.app.ui.screens.events.EVENT_CATEGORIES
 import com.nexory.app.ui.screens.events.SKILL_LEVELS
@@ -99,7 +101,18 @@ fun FeedScreen(
                 onDismissRequest = { showFilters = false },
                 containerColor   = NexoryColors.SurfaceDark,
             ) {
-                Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+                // imePadding обязателен: внутри шторки есть поля ввода (цена, метро,
+                // место, поиск увлечения). Без него клавиатура перекрывала поле,
+                // и scrollOnFocus не мог подвести его в видимую область —
+                // прокручивать было просто некуда.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 24.dp)
+                ) {
                     // Заголовок и сброс — в одной строке сверху: сбросить фильтры нужно
                     // быстро, а не долистывая весь список настроек до низа.
                     Row(
@@ -135,13 +148,22 @@ fun FeedScreen(
                     Spacer(Modifier.height(16.dp))
                     Text("Сортировка", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
                     Spacer(Modifier.height(8.dp))
-                    // Формулировки развели явно: «ближайшие» — про дату проведения,
-                    // «новые» — про момент публикации. Раньше одна размытая подпись
-                    // не давала понять, о чём речь.
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CategoryChip("Сначала ближайшие по дате", uiState.sort == "soon") { viewModel.setSort("soon") }
-                        CategoryChip("Сначала недавно созданные", uiState.sort == "new") { viewModel.setSort("new") }
-                    }
+                    // Раньше это были два чипа в Row с длинными подписями
+                    // («Сначала ближайшие по дате» / «Сначала недавно созданные»):
+                    // в строку они не помещались, второй уезжал за край экрана.
+                    // Сегменты делят ширину поровну — подписи всегда выровнены,
+                    // а разницу между вариантами объясняет строка под ними.
+                    SegmentedSelector(
+                        options       = listOf("Сначала ближайшие", "Сначала новые"),
+                        selectedIndex = if (uiState.sort == "new") 1 else 0,
+                        onSelect      = { viewModel.setSort(if (it == 1) "new" else "soon") },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (uiState.sort == "new") "Сверху — недавно опубликованные мероприятия"
+                        else "Сверху — те, что состоятся раньше",
+                        color = NexoryColors.TextSecondary, fontSize = 12.sp,
+                    )
 
                     // Цена одним элементом: отдельный переключатель «Только бесплатные»
                     // убран — он дублировал крайнее левое положение шкалы.
@@ -172,7 +194,7 @@ fun FeedScreen(
                         selected = uiState.selectedInterests,
                         onToggle = { viewModel.toggleInterest(it) },
                         onSelectAllMine = { viewModel.useMyProfileInterests() },
-                        onClearMine = { viewModel.clearInterests() },
+                        onClear = { viewModel.clearInterests() },
                         onAddCustom = { viewModel.addInterest(it) },
                     )
 
@@ -425,7 +447,7 @@ private fun LocationFilter(value: String, onChange: (String) -> Unit) {
     OutlinedTextField(
         value         = text,
         onValueChange = { text = it; onChange(it) },
-        modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp).scrollOnFocus(),
         placeholder   = { Text("Место (город, район)...", color = NexoryColors.TextSecondary) },
         leadingIcon   = { Icon(Icons.Default.LocationOn, null, tint = NexoryColors.TextSecondary) },
         trailingIcon  = if (text.isNotEmpty()) {{
@@ -484,15 +506,62 @@ private fun CategoryChip(label: String, active: Boolean, onClick: () -> Unit) {
 }
 
 /**
+ * Сегментированный переключатель на всю ширину.
+ *
+ * Сегменты делят ширину поровну, поэтому подписи выровнены между собой
+ * независимо от длины текста — в отличие от чипов в Row, где длинные варианты
+ * не помещались в строку и уезжали за край экрана.
+ */
+@Composable
+private fun SegmentedSelector(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(NexoryColors.SurfaceMid)
+            .padding(3.dp),
+    ) {
+        options.forEachIndexed { index, title ->
+            val active = selectedIndex == index
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (active) NexoryColors.PrimaryBlue else Color.Transparent)
+                    .clickable { onSelect(index) }
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    title,
+                    color = if (active) Color.White else NexoryColors.TextSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+/**
  * Фильтр по увлечениям: две равноправные вкладки.
  *
- *  «Увлечения»     — общий список всех доступных вариантов плюс поиск с
- *                    возможностью добавить своё.
- *  «Мои увлечения» — то, что пользователь указал в профиле, с кнопками
- *                    выбрать все / снять все.
+ *  «Все увлечения» — пользователь вводит увлечение сам, подсказки появляются
+ *                    по мере ввода; чего нет в подсказках — добавляется кнопкой «+».
+ *  «Мои увлечения» — то, что указано в профиле, с кнопками выбрать всё / очистить.
  *
- * Вкладки на одном уровне, а не вложены друг в друга: раньше личные интересы
- * были свёрнутой панелью внутри общего списка, и было неочевидно, где что.
+ * Готового списка-простыни здесь намеренно НЕТ. Раньше вкладка «Все увлечения»
+ * вываливала два десятка чипов сразу: их приходилось вычитывать глазами, они
+ * занимали пол-экрана шторки и всё равно не покрывали то, что человек ищет.
+ * Ввод с автоподбором — ровно тот же приём, что и в редактировании профиля.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -502,7 +571,7 @@ private fun InterestsFilterSection(
     selected: Set<String>,
     onToggle: (String) -> Unit,
     onSelectAllMine: () -> Unit,
-    onClearMine: () -> Unit,
+    onClear: () -> Unit,
     onAddCustom: (String) -> Unit,
 ) {
     var tab by remember { mutableStateOf(0) }
@@ -524,63 +593,47 @@ private fun InterestsFilterSection(
         }
         Spacer(Modifier.height(10.dp))
 
-        // Переключатель вкладок — сегментированная плашка, а не TabRow:
-        // внутри модального листа TabRow смотрится тяжеловесно
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(NexoryColors.SurfaceMid)
-                .padding(3.dp),
-        ) {
-            listOf("Все увлечения", "Мои увлечения").forEachIndexed { index, title ->
-                val active = tab == index
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (active) NexoryColors.PrimaryBlue else Color.Transparent)
-                        .clickable { tab = index }
-                        .padding(vertical = 9.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        title,
-                        color = if (active) Color.White else NexoryColors.TextSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                }
-            }
-        }
+        SegmentedSelector(
+            options = listOf("Все увлечения", "Мои увлечения"),
+            selectedIndex = tab,
+            onSelect = { tab = it },
+        )
 
         Spacer(Modifier.height(12.dp))
 
         if (tab == 0) {
-            // Поиск по общему списку. Иконки в начале поля больше нет —
-            // она не несла смысла и только съедала место.
             val suggestions = remember(query, selected) {
                 val q = query.trim()
                 if (q.isBlank()) emptyList()
                 else allInterests.filter { it.contains(q, ignoreCase = true) && it !in selected }.take(6)
             }
-            com.nexory.app.ui.components.AutocompleteTextField(
-                value = query,
-                onValueChange = { query = it },
+            com.nexory.app.ui.components.InterestInputRow(
+                query = query,
+                onQueryChange = { query = it },
                 suggestions = suggestions,
-                onSuggestionPick = { onToggle(it); query = "" },
-                placeholder = "Найти увлечение",
-                allowCustomValue = true,
-                onCustomValueAdd = { onAddCustom(it); query = "" },
+                onPick = { onToggle(it); query = "" },
+                onAddCustom = { onAddCustom(it); query = "" },
+                placeholder = "Начните вводить увлечение",
             )
-            Spacer(Modifier.height(10.dp))
 
-            // Показываем выбранные + популярные, личные сюда не подмешиваем:
-            // для них есть отдельная вкладка
-            val options = remember(selected, myInterests) {
-                (selected.toList() + allInterests).distinct().take(20)
+            Spacer(Modifier.height(10.dp))
+            if (selected.isEmpty()) {
+                Text(
+                    "Подсказки появятся по мере ввода. Если нужного увлечения нет в списке — " +
+                        "добавьте своё кнопкой «+».",
+                    color = NexoryColors.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp,
+                )
+            } else {
+                OutlinedButton(
+                    onClick = onClear,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NexoryColors.TextSecondary),
+                ) { Text("Очистить", fontSize = 13.sp) }
+                Spacer(Modifier.height(10.dp))
+                // Показываем только выбранное: общий список пользователь набирает сам
+                FlowRowChips(items = selected.toList(), selected = selected, onToggle = onToggle)
             }
-            FlowRowChips(items = options, selected = selected, onToggle = onToggle)
         } else {
             if (myInterests.isEmpty()) {
                 Column(
@@ -616,12 +669,12 @@ private fun InterestsFilterSection(
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = NexoryColors.PrimaryBlue),
                     ) { Text("Выбрать все", fontSize = 13.sp) }
                     OutlinedButton(
-                        onClick = onClearMine,
+                        onClick = onClear,
                         enabled = selected.isNotEmpty(),
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = NexoryColors.TextSecondary),
-                    ) { Text("Снять все", fontSize = 13.sp) }
+                    ) { Text("Очистить", fontSize = 13.sp) }
                 }
                 Spacer(Modifier.height(10.dp))
                 FlowRowChips(items = myInterests, selected = selected, onToggle = onToggle)
@@ -629,6 +682,7 @@ private fun InterestsFilterSection(
         }
     }
 }
+
 
 /**
  * Фильтр по цене: слайдер, у которого значение можно ещё и ввести вручную.
@@ -662,7 +716,9 @@ private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
                 OutlinedTextField(
                     value = editText,
                     onValueChange = { editText = it.filter { c -> c.isDigit() }.take(5) },
-                    modifier = Modifier.width(130.dp),
+                    // scrollOnFocus — поле уезжало под клавиатуру, и введённой
+                    // суммы не было видно. Работает в паре с imePadding у шторки.
+                    modifier = Modifier.width(130.dp).scrollOnFocus(),
                     singleLine = true,
                     placeholder = { Text("₽", color = NexoryColors.TextSecondary) },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -726,15 +782,32 @@ private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
                 inactiveTrackColor = NexoryColors.SurfaceMid,
             ),
         )
+        // Подписи по краям шкалы — не украшение, а кнопки: тап ставит крайнее
+        // значение. Точно попасть ползунком в 0 или в самый конец шкалы неудобно,
+        // а это два самых частых выбора.
         Row(modifier = Modifier.fillMaxWidth()) {
             Text(
                 "Только бесплатные",
                 color = if (isFree) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
                 fontSize = 11.sp,
                 fontWeight = if (isFree) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { editing = false; onChange(0) }
+                    .padding(vertical = 4.dp),
             )
-            Text("Любая цена", color = NexoryColors.TextSecondary, fontSize = 11.sp)
+            val isAny = maxPrice == null
+            Text(
+                "Любая цена",
+                color = if (isAny) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = if (isAny) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { editing = false; onChange(null) }
+                    .padding(vertical = 4.dp),
+            )
         }
     }
 }
@@ -767,7 +840,7 @@ private fun FlowRowChips(items: List<String>, selected: Set<String>, onToggle: (
 @Composable
 fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit) {
     // Мероприятие уже прошло — сразу видно по карточке, открывать не нужно
-    val isFinished = remember(event.startsAt) { isEventFinished(event.startsAt) }
+    val isFinished = remember(event.startsAt, event.endsAt) { isEventFinished(event.startsAt, event.endsAt) }
     Card(
         modifier  = Modifier
             .fillMaxWidth()

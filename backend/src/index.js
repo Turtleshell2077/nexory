@@ -41,7 +41,21 @@ const PORT = process.env.PORT || 3000;
 // Прогоняем миграции на старте — схема БД всегда актуальна после деплоя.
 // Миграции идемпотентны (IF NOT EXISTS / пропуск «уже существует»).
 migrate()
-    .then(() => console.log('✓ Миграции применены'))
+    .then(({ failed, missing }) => {
+        if (!failed.length && !missing.length) {
+            console.log('✓ Миграции применены');
+            return;
+        }
+        // Раньше сбой миграции был обычной строкой в логе, сервер стартовал с
+        // неполной схемой — и это проявлялось позже как «Ошибка на сервере» при
+        // сохранении мероприятия. Теперь состояние схемы видно сразу при старте.
+        console.error('\n' + '='.repeat(64));
+        console.error('⚠️  СХЕМА БАЗЫ НЕ В ПОРЯДКЕ — часть функций будет отдавать ошибку 500');
+        failed.forEach(f => console.error(`   миграция ${f.file}: ${f.reason}`));
+        if (missing.length) console.error(`   отсутствуют колонки: ${missing.join(', ')}`);
+        console.error('   Почините БД и перезапустите сервер: npm run migrate');
+        console.error('='.repeat(64) + '\n');
+    })
     .catch((e) => console.error('⚠️  Ошибка миграций (сервер всё равно запустится):', e.message))
     .finally(() => {
         server.listen(PORT, () => {

@@ -1,4 +1,14 @@
 const { body, query } = require('express-validator');
+const { normalizeUrl } = require('../utils/url');
+
+// Ссылка на покупку билета: сначала приводим ввод к каноническому виду
+// («vk.com/x» → «https://vk.com/x»), и только потом проверяем. Иначе адрес,
+// введённый без протокола, отклонялся, хотя пользователь всё указал верно.
+const ticketUrlRule = (chain) => chain
+    .optional({ checkFalsy: true })
+    .customSanitizer(normalizeUrl)
+    .isURL({ protocols: ['http', 'https'], require_protocol: true })
+    .withMessage('Проверьте ссылку на билет — она должна вести на сайт, например https://timepad.ru/event/1');
 
 // Наборы правил валидации для маршрутов
 module.exports = {
@@ -29,19 +39,13 @@ module.exports = {
             body('max_participants').optional({ checkFalsy: true }).isInt({ min: 1, max: 100000 }),
             body('price').optional({ checkFalsy: true }).isFloat({ min: 0 }),
             body('description').optional({ checkFalsy: true }).isLength({ max: 5000 }),
-            // Ссылка на покупку билета — только http/https, чтобы из приложения
-            // нельзя было открыть произвольную схему (intent:, file: и т.п.)
-            body('ticket_url').optional({ checkFalsy: true })
-                .isURL({ protocols: ['http', 'https'], require_protocol: true })
-                .withMessage('Укажите корректную ссылку, начиная с https://'),
+            ticketUrlRule(body('ticket_url')),
         ],
         update: [
             body('title').optional({ checkFalsy: true }).isLength({ max: 200 }),
             body('max_participants').optional({ checkFalsy: true }).isInt({ min: 1, max: 100000 }),
             body('price').optional({ checkFalsy: true }).isFloat({ min: 0 }),
-            body('ticket_url').optional({ checkFalsy: true })
-                .isURL({ protocols: ['http', 'https'], require_protocol: true })
-                .withMessage('Укажите корректную ссылку, начиная с https://'),
+            ticketUrlRule(body('ticket_url')),
         ],
     },
 

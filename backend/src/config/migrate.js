@@ -21,10 +21,16 @@ async function migrate() {
         '014_event_ticket_url.sql',
     ];
 
+    // Неприменившиеся миграции возвращаем наверх. Раньше ошибка просто уходила
+    // в лог, сервер стартовал с неполной схемой, и это всплывало позже случайным
+    // «Ошибка на сервере» при сохранении — без единой подсказки, что дело в БД.
+    const failed = [];
+
     for (const file of migrations) {
         const sqlPath = path.join(__dirname, '../../migrations', file);
         if (!fs.existsSync(sqlPath)) {
             console.log(`[migrate] Skipping ${file} (not found)`);
+            failed.push({ file, reason: 'файл миграции отсутствует' });
             continue;
         }
         const sql = fs.readFileSync(sqlPath, 'utf8');
@@ -38,8 +44,39 @@ async function migrate() {
                 console.log(`[migrate] ${file} skipped (already exists)`);
             } else {
                 console.error(`[migrate] ${file} error:`, err.message);
+                failed.push({ file, reason: err.message });
             }
         }
+    }
+
+    const missing = await missingColumns();
+    return { failed, missing };
+}
+
+// Колонки, без которых ломаются целые экраны приложения. Проверяем их явно:
+// список миграций мог отработать «успешно» на другой базе, а прод-схема отстать.
+const REQUIRED_COLUMNS = [
+    ['events', 'price'], ['events', 'skill_level'], ['events', 'event_type'],
+    ['events', 'price_description'], ['events', 'metro'], ['events', 'ticket_url'],
+    ['users', 'status'], ['users', 'profile_visibility'], ['users', 'notify_messages'],
+    ['chats', 'avatar_url'], ['chat_members', 'muted'], ['chat_members', 'archived'],
+    ['event_participants', 'role'],
+];
+
+async function missingColumns() {
+    try {
+        const res = await pool.query(`
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+        `);
+        const have = new Set(res.rows.map(r => `${r.table_name}.${r.column_name}`));
+        return REQUIRED_COLUMNS
+            .map(([t, c]) => `${t}.${c}`)
+            .filter(key => !have.has(key));
+    } catch (err) {
+        console.error('[migrate] не удалось проверить схему:', err.message);
+        return [];
     }
 }
 
@@ -47,7 +84,10 @@ async function migrate() {
 // Импорт из index.js — прогоняем на старте сервера, пул не трогаем.
 if (require.main === module) {
     migrate()
-        .then(() => pool.end())
+        .then(({ failed, missing }) => {
+            if (missing.length) console.error('[migrate] НЕ ХВАТАЕТ КОЛОНОК:', missing.join(', '));
+            return pool.end().then(() => process.exit(failed.length || missing.length ? 1 : 0));
+        })
         .catch((e) => { console.error('[migrate] fatal:', e); process.exit(1); });
 }
 

@@ -28,6 +28,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -78,6 +79,9 @@ class UserProfileViewModel @Inject constructor(
                         age         = (it["age"] as? Double)?.toInt(),
                         phone       = it["phone"] as? String,
                         email       = it["email"] as? String,
+                        // Статус показывается под аватаром на своём профиле —
+                        // в чужом он просто не читался из ответа и терялся
+                        status      = it["status"] as? String,
                     )
                 }
                 val status = (m?.get("friend_status") as? String) ?: "none"
@@ -125,7 +129,15 @@ fun UserProfileScreen(
     val state by viewModel.state.collectAsState()
     var showAvatarFull by remember { mutableStateOf(false) }
     var showAvatarRect by remember { mutableStateOf(false) }
-    LaunchedEffect(userId) { viewModel.load(userId) }
+    // Перечитываем при каждом возврате на экран, а не только при смене userId:
+    // иначе изменения, сделанные на других экранах (заявка в друзья, правки
+    // профиля), не подхватывались — id-то тот же, эффект не перезапускался.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(userId, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            viewModel.load(userId)
+        }
+    }
 
     if (showAvatarFull && state.user?.avatarUrl != null) {
         Dialog(onDismissRequest = { showAvatarFull = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -197,6 +209,10 @@ fun UserProfileScreen(
                 fontSize = 22.sp, fontWeight = FontWeight.Bold, color = NexoryColors.TextPrimary)
             if (state.user?.displayName?.isNotBlank() == true) {
                 Text("@${state.user?.username}", fontSize = 13.sp, color = NexoryColors.TextSecondary)
+            }
+            state.user?.status?.takeIf { it.isNotBlank() }?.let {
+                Text(it, fontSize = 14.sp, color = NexoryColors.LightViolet,
+                    modifier = Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp))
             }
             state.user?.bio?.takeIf { it.isNotBlank() }?.let {
                 Text(it, fontSize = 13.sp, color = NexoryColors.TextSecondary,

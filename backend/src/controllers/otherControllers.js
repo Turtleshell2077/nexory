@@ -204,23 +204,35 @@ const updateProfile = async (req, res) => {
         const result = await query(`
             UPDATE users SET
                 username               = COALESCE($1,  username),
-                bio                    = COALESCE($2,  bio),
+                -- NULLIF(COALESCE(...), '') — единое правило для всех полей,
+                -- которые пользователь вправе стереть:
+                --   поле не пришло → COALESCE вернёт старое значение («не менять»)
+                --   пришла ''      → NULLIF обнулит («очистить»)
+                -- Без NULLIF в базу ложилась пустая строка: формально «очищено»,
+                -- но это не NULL, и любой код, проверяющий поле на NULL, считал
+                -- его заполненным.
+                bio                    = NULLIF(COALESCE($2,  bio), ''),
                 avatar_url             = COALESCE($3,  avatar_url),
-                display_name           = COALESCE($4,  display_name),
-                age                    = COALESCE($5::integer, age),
-                country                = COALESCE($6,  country),
-                city                   = COALESCE($7,  city),
-                sports                 = COALESCE($8,  sports),
-                looking_for            = COALESCE($9,  looking_for),
-                activity               = COALESCE($10, activity),
+                display_name           = NULLIF(COALESCE($4,  display_name), ''),
+                -- Возраст живёт по тому же правилу, что и текстовые поля, только
+                -- с обратным приведением к числу. Раньше здесь стояло
+                -- COALESCE($5::integer, age), а на входе возраст превращался в
+                -- число или в null: очищенное поле приходило как null, COALESCE
+                -- возвращал СТАРЫЙ возраст, и стереть его было невозможно.
+                age                    = NULLIF(COALESCE($5::text, age::text), '')::integer,
+                country                = NULLIF(COALESCE($6,  country), ''),
+                city                   = NULLIF(COALESCE($7,  city), ''),
+                sports                 = NULLIF(COALESCE($8,  sports), ''),
+                looking_for            = NULLIF(COALESCE($9,  looking_for), ''),
+                activity               = NULLIF(COALESCE($10, activity), ''),
                 notifications_enabled  = COALESCE($11::boolean, notifications_enabled),
-                phone                  = COALESCE($12, phone),
+                phone                  = NULLIF(COALESCE($12, phone), ''),
                 contacts_public        = COALESCE($13::boolean, contacts_public),
                 profile_visibility     = COALESCE($14, profile_visibility),
                 notify_messages        = COALESCE($15::boolean, notify_messages),
                 notify_friend_events   = COALESCE($16::boolean, notify_friend_events),
                 notify_interest_events = COALESCE($17::boolean, notify_interest_events),
-                status                 = COALESCE($19, status),
+                status                 = NULLIF(COALESCE($19, status), ''),
                 updated_at             = NOW()
             WHERE id = $18
             RETURNING id, username, bio, avatar_url, display_name, status,
@@ -243,7 +255,9 @@ const updateProfile = async (req, res) => {
             clearable(bio),
             avatar_url  || null,
             clearable(display_name),
-            age         ? parseInt(age) : null,
+            // Возраст передаём строкой: CASE выше сам отличит «не менять» (null)
+            // от «очистить» ('') и приведёт остальное к числу
+            clearable(age),
             clearable(country),
             clearable(city),
             clearable(sports),

@@ -187,6 +187,12 @@ fun EventDetailScreen(
             }
             else -> {
                 val event = uiState.event!!
+                // Мероприятие уже прошло. В ленте это видно по карточке, но при
+                // переходе внутрь отметка терялась — приходилось сверять дату
+                // самому. Показываем её явно и не предлагаем записаться.
+                val isFinished = remember(event.startsAt, event.endsAt) {
+                    isEventFinished(event.startsAt, event.endsAt)
+                }
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
 
                     // Обложка + кнопка назад
@@ -247,6 +253,25 @@ fun EventDetailScreen(
                     // Заголовок и мета
                     item {
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            if (isFinished) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(NexoryColors.SurfaceMid)
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Default.EventBusy, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Мероприятие завершено",
+                                        color = NexoryColors.TextSecondary,
+                                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                                Spacer(Modifier.height(10.dp))
+                            }
                             event.category?.let {
                                 Text(it.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NexoryColors.LightViolet)
                                 Spacer(Modifier.height(4.dp))
@@ -408,15 +433,18 @@ fun EventDetailScreen(
                             val isFull = event.maxParticipants != null && event.participantCount >= event.maxParticipants
 
                             if (!uiState.isMyEvent) {
-                                // Кнопка записи / отписки
+                                // Кнопка записи / отписки. На прошедшее мероприятие
+                                // записаться нельзя — но уже записанный участник
+                                // по-прежнему может отписаться.
                                 GradientButton(
                                     text    = when {
                                         uiState.isJoined     -> "Отписаться"
+                                        isFinished           -> "Мероприятие завершено"
                                         isFull               -> "Мест нет"
                                         else                 -> "Записаться"
                                     },
                                     loading = uiState.actionLoading,
-                                    enabled = uiState.isJoined || !isFull,
+                                    enabled = uiState.isJoined || (!isFull && !isFinished),
                                     danger  = uiState.isJoined,
                                 ) {
                                     if (uiState.isJoined) viewModel.leaveEvent(eventId) else viewModel.joinEvent(eventId)

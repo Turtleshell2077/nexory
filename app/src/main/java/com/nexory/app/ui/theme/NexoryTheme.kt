@@ -30,6 +30,9 @@ object NexoryColors {
     val Error         = Color(0xFFE25A5A)
 
     // ---- Зависят от темы (реактивные) ----
+    /** Текущая тема. Нужна там, где одного цвета мало — например, фон чата
+     *  подбирает подсветку разной насыщенности для тёмного и светлого оформления. */
+    var isDark: Boolean by mutableStateOf(true); private set
     var DeepBlack:     Color by mutableStateOf(Color(0xFF0A0A12)); private set
     var SurfaceDark:   Color by mutableStateOf(Color(0xFF12121F)); private set
     var SurfaceMid:    Color by mutableStateOf(Color(0xFF1E1E30)); private set
@@ -37,6 +40,7 @@ object NexoryColors {
     var TextSecondary: Color by mutableStateOf(Color(0xFF8888AA)); private set
 
     fun apply(dark: Boolean) {
+        isDark = dark
         if (dark) {
             DeepBlack     = Color(0xFF0A0A12)
             SurfaceDark   = Color(0xFF12121F)
