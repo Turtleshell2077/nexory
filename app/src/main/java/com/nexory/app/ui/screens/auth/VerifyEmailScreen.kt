@@ -25,6 +25,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.nexory.app.data.network.NexoryApi
 import com.nexory.app.ui.components.nexoryTextFieldColors
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -120,7 +121,7 @@ fun VerifyEmailScreen(
             OutlinedTextField(
                 value = code,
                 onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollOnFocus(),
                 placeholder = { Text("Код из письма", color = NexoryColors.TextSecondary) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

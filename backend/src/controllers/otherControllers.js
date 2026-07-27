@@ -170,6 +170,10 @@ const updateProfile = async (req, res) => {
 
     const boolOrNull = (v) => v !== undefined ? String(v) : null;
 
+    // Для текстовых полей, которые пользователь вправе стереть:
+    // undefined → null («не менять»), '' → '' («очистить»).
+    const clearable = (v) => (v === undefined || v === null) ? null : String(v);
+
     try {
         // Удаление фото профиля.
         // Пустая строка в avatar_url — это явное «удалить», тогда как null/undefined
@@ -228,18 +232,25 @@ const updateProfile = async (req, res) => {
                       -- снова показывает «подтвердите почту», хотя почта подтверждена.
                       is_verified
         `, [
-            username    || null,
-            bio         || null,
+            // ВАЖНО про очистку полей.
+            // Раньше здесь стояло `bio || null`, и пустая строка превращалась в NULL,
+            // а COALESCE(NULL, bio) возвращал СТАРОЕ значение — стереть текст в профиле
+            // было невозможно, на экране оставалось прежнее.
+            // Теперь различаем два случая:
+            //   поле не пришло в запросе (undefined) → null → «не менять»
+            //   поле пришло пустой строкой         → ''   → «очистить»
+            username    || null,                              // ник очищать нельзя
+            clearable(bio),
             avatar_url  || null,
-            display_name || null,
+            clearable(display_name),
             age         ? parseInt(age) : null,
-            country     || null,
-            city        || null,
-            sports      || null,
-            looking_for || null,
-            activity    || null,
+            clearable(country),
+            clearable(city),
+            clearable(sports),
+            clearable(looking_for),
+            clearable(activity),
             boolOrNull(notifications_enabled),
-            phone       || null,
+            clearable(phone),
             boolOrNull(contacts_public),
             profile_visibility || null,
             boolOrNull(notify_messages),
@@ -248,7 +259,7 @@ const updateProfile = async (req, res) => {
             userId,
             // $19 — статус. Добавлен в конец, чтобы не сдвигать нумерацию
             // существующих параметров. Пустая строка означает «очистить».
-            status !== undefined ? (status || '') : null,
+            clearable(status),
         ]);
 
         res.json({ user: result.rows[0] });

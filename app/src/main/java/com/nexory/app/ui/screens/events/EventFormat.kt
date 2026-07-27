@@ -74,6 +74,12 @@ private fun plural(n: Long, one: String, few: String, many: String): String {
     }
 }
 
+/** Мероприятие уже прошло? Нужно, чтобы помечать карточки в ленте. */
+fun isEventFinished(startsAt: String?): Boolean {
+    val start = parse(startsAt) ?: return false
+    return start.toInstant().isBefore(java.time.Instant.now())
+}
+
 // "Бесплатно" или "500 ₽"
 fun formatPrice(price: Double?): String {
     if (price == null || price <= 0.0) return "Бесплатно"

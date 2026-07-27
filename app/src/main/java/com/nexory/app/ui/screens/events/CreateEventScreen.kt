@@ -62,26 +62,63 @@ fun CreateEventScreen(
         if (uiState.isCreated) navController.popBackStack()
     }
 
-    var title           by remember(loaded) { mutableStateOf(loaded?.title ?: "") }
-    var description     by remember(loaded) { mutableStateOf(loaded?.description ?: "") }
-    var location        by remember(loaded) { mutableStateOf(loaded?.address ?: "") }
-    var category        by remember(loaded) { mutableStateOf(loaded?.category ?: "") }
-    var maxParticipants by remember(loaded) { mutableStateOf(loaded?.maxParticipants?.toString() ?: "") }
-    var isPrivate       by remember(loaded) { mutableStateOf(loaded?.isPrivate ?: false) }
-    var price           by remember(loaded) { mutableStateOf(loaded?.price?.takeIf { it > 0.0 }?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: "") }
-    var priceDesc       by remember(loaded) { mutableStateOf(loaded?.priceDescription ?: "") }
-    var skillLevel      by remember(loaded) { mutableStateOf(loaded?.skillLevel ?: "") }
-    var metro           by remember(loaded) { mutableStateOf(loaded?.metro ?: "") }
-    var eventType       by remember(loaded) { mutableStateOf(loaded?.eventType ?: "") }
-    var coverUri        by remember { mutableStateOf<Uri?>(null) }   // превью
-    var coverUrl        by remember(loaded) { mutableStateOf(loaded?.coverUrl) } // загруженный URL
+    // ВАЖНО про ключ remember.
+    // Раньше все поля формы были объявлены как remember(loaded). `loaded` — это
+    // EventDto из состояния ViewModel, и он менялся не только при первой загрузке:
+    // при любом обновлении состояния с новым экземпляром DTO ключ менялся, и вся
+    // форма ПЕРЕИНИЦИАЛИЗИРОВАЛАСЬ серверными значениями — введённое пользователем
+    // (в том числе только что загруженная обложка) молча откатывалось.
+    //
+    // Теперь ключ — eventId (он не меняется за время жизни экрана), а серверные
+    // данные подставляются РОВНО ОДИН РАЗ через LaunchedEffect ниже.
+    var title           by remember(eventId) { mutableStateOf("") }
+    var description     by remember(eventId) { mutableStateOf("") }
+    var location        by remember(eventId) { mutableStateOf("") }
+    var category        by remember(eventId) { mutableStateOf("") }
+    var maxParticipants by remember(eventId) { mutableStateOf("") }
+    var isPrivate       by remember(eventId) { mutableStateOf(false) }
+    var price           by remember(eventId) { mutableStateOf("") }
+    var priceDesc       by remember(eventId) { mutableStateOf("") }
+    var ticketUrl       by remember(eventId) { mutableStateOf("") }
+    var skillLevel      by remember(eventId) { mutableStateOf("") }
+    var metro           by remember(eventId) { mutableStateOf("") }
+    var eventType       by remember(eventId) { mutableStateOf("") }
+    var coverUri        by remember(eventId) { mutableStateOf<Uri?>(null) }   // превью
+    var coverUrl        by remember(eventId) { mutableStateOf<String?>(null) } // загруженный URL
     var uploadingCover  by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Дата/время: ISO для бэкенда + человекочитаемое для UI
-    var startsAtIso     by remember(loaded) { mutableStateOf(loaded?.startsAt ?: "") }
-    var endsAtIso       by remember(loaded) { mutableStateOf(loaded?.endsAt) }
-    var dateTimeDisplay by remember(loaded) { mutableStateOf(loaded?.let { formatEventDateTime(it.startsAt, it.endsAt) } ?: "") }
+    var startsAtIso     by remember(eventId) { mutableStateOf("") }
+    var endsAtIso       by remember(eventId) { mutableStateOf<String?>(null) }
+    var dateTimeDisplay by remember(eventId) { mutableStateOf("") }
+
+    // Единоразовое заполнение формы данными с сервера (только режим редактирования).
+    // Флаг гарантирует, что повторные обновления `loaded` не затрут правки пользователя.
+    var formPrefilled by remember(eventId) { mutableStateOf(false) }
+    LaunchedEffect(loaded) {
+        val e = loaded
+        if (e != null && !formPrefilled) {
+            formPrefilled = true
+            title           = e.title
+            description     = e.description ?: ""
+            location        = e.address
+            category        = e.category ?: ""
+            maxParticipants = e.maxParticipants?.toString() ?: ""
+            isPrivate       = e.isPrivate
+            price           = e.price?.takeIf { it > 0.0 }
+                ?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: ""
+            priceDesc       = e.priceDescription ?: ""
+            ticketUrl       = e.ticketUrl ?: ""
+            skillLevel      = e.skillLevel ?: ""
+            metro           = e.metro ?: ""
+            eventType       = e.eventType ?: ""
+            coverUrl        = e.coverUrl
+            startsAtIso     = e.startsAt
+            endsAtIso       = e.endsAt
+            dateTimeDisplay = formatEventDateTime(e.startsAt, e.endsAt)
+        }
+    }
 
     var categoryExpanded by remember { mutableStateOf(false) }
     var levelExpanded   by remember { mutableStateOf(false) }
@@ -394,6 +431,24 @@ fun CreateEventScreen(
                     placeholder = "Например: аренда зала, инвентарь",
                     maxLines = 3,
                 )
+
+                // Ссылка на билет — только для платных мероприятий.
+                // Название выбрано разговорное: «Где купить билет» короче и понятнее,
+                // чем формальное «Ссылка на покупку билета».
+                FieldLabel("Где купить билет")
+                val ticketUrlValid = ticketUrl.isBlank() || isValidTicketUrl(ticketUrl)
+                PlainField(
+                    value = ticketUrl,
+                    onValueChange = { ticketUrl = it.trim() },
+                    placeholder = "https://... — необязательно",
+                    isError = !ticketUrlValid,
+                )
+                Text(
+                    if (!ticketUrlValid) "Ссылка должна начинаться с https:// или http://"
+                    else "Кнопка «Купить билет» появится на карточке мероприятия",
+                    color = if (!ticketUrlValid) NexoryColors.Error else NexoryColors.TextSecondary,
+                    fontSize = 12.sp,
+                )
             }
 
             // ---- Уровень ----
@@ -479,7 +534,11 @@ fun CreateEventScreen(
             }
 
             // ---- Кнопка сохранения ----
-            val canCreate = !uiState.isLoading && title.isNotBlank() && location.isNotBlank() && startsAtIso.isNotBlank()
+            // Некорректная ссылка на билет блокирует сохранение — иначе сервер
+            // вернёт 400, и пользователь не поймёт, из-за какого поля
+            val ticketOk = ticketUrl.isBlank() || isValidTicketUrl(ticketUrl)
+            val canCreate = !uiState.isLoading && title.isNotBlank() &&
+                location.isNotBlank() && startsAtIso.isNotBlank() && ticketOk
             Button(
                 onClick = {
                     viewModel.save(
@@ -496,8 +555,11 @@ fun CreateEventScreen(
                         price           = price.toDoubleOrNull(),
                         skillLevel      = skillLevel.takeIf { it.isNotBlank() },
                         eventType       = eventType.takeIf { it.isNotBlank() },
-                        priceDescription = priceDesc.takeIf { it.isNotBlank() },
-                        metro           = metro.takeIf { it.isNotBlank() },
+                        priceDescription = priceDesc,
+                        metro           = metro,
+                        // Ссылку сохраняем только для платных мероприятий:
+                        // если цену обнулили, старая ссылка должна уйти вместе с ней
+                        ticketUrl       = if (price.toIntOrNull()?.let { it > 0 } == true) ticketUrl.trim() else "",
                     )
                 },
                 modifier = Modifier.fillMaxWidth().height(54.dp),
@@ -520,6 +582,22 @@ fun CreateEventScreen(
 
             Spacer(Modifier.height(8.dp))
         }
+    }
+}
+
+/**
+ * Проверка ссылки на билет перед отправкой.
+ * Разрешаем только http/https: иначе из карточки мероприятия можно было бы
+ * открыть произвольную схему (intent:, file:) — тот же список, что и на сервере.
+ */
+fun isValidTicketUrl(url: String): Boolean {
+    val u = url.trim()
+    if (!u.startsWith("http://") && !u.startsWith("https://")) return false
+    return try {
+        val parsed = java.net.URL(u)
+        !parsed.host.isNullOrBlank() && parsed.host.contains(".")
+    } catch (_: Exception) {
+        false
     }
 }
 

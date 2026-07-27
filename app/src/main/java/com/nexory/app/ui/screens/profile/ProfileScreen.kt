@@ -56,7 +56,7 @@ fun ProfileScreen(
     // Настоящая фотография (а не выбранный вариант оформления). Полноэкранный
     // просмотр имеет смысл только для неё.
     val hasRealPhoto = uiState.user?.avatarUrl.let {
-        !it.isNullOrBlank() && !com.nexory.app.ui.components.AvatarPresets.isPreset(it)
+        com.nexory.app.ui.components.AvatarPresets.isRealPhoto(it)
     }
 
     val cropAvatar = com.nexory.app.ui.components.rememberImageCropper(circle = true) { cropped ->
@@ -73,9 +73,7 @@ fun ProfileScreen(
             currentUrl = uiState.user?.avatarUrl,
             userName = uiState.user?.displayName?.takeIf { it.isNotBlank() } ?: uiState.user?.username,
             onPickPhoto = { avatarPicker.launch("image/*") },
-            onPickPreset = { viewModel.setAvatarPreset(it) },
             onRemove = { viewModel.removeAvatar() },
-            onOpenStylePicker = { navController.navigate(Screen.AvatarStyle.route) },
             onDismiss = { showAvatarPicker = false },
         )
     }
@@ -179,14 +177,9 @@ fun ProfileScreen(
                         fontWeight = FontWeight.Bold,
                         color      = NexoryColors.TextPrimary,
                     )
-                    if (!uiState.user?.username.isNullOrBlank() &&
-                        uiState.user?.displayName?.isNotBlank() == true) {
-                        Text(
-                            "@${uiState.user!!.username}",
-                            fontSize = 13.sp,
-                            color    = NexoryColors.TextSecondary,
-                        )
-                    }
+                    // Ник переехал в блок «Информация» — под аватаром остаются
+                    // только имя и статус, так шапка выглядит спокойнее.
+
                     // Под аватаром показываем короткий СТАТУС.
                     // «О себе» (bio) переехало вниз блока информации, после email.
                     uiState.user?.status?.takeIf { it.isNotBlank() }?.let {
@@ -228,9 +221,8 @@ fun ProfileScreen(
             // Информация о пользователе — текстом, с заголовком раздела
             val user = uiState.user
             if (user != null) {
-                val hasBasics  = !user.city.isNullOrBlank() || user.age != null ||
-                    !user.phone.isNullOrBlank() || !user.email.isNullOrBlank() ||
-                    !user.bio.isNullOrBlank()
+                // Ник есть всегда, поэтому блок информации показываем всегда
+                val hasBasics = true
                 val interests  = user.sports?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
 
                 if (hasBasics) {
@@ -244,6 +236,8 @@ fun ProfileScreen(
                     ) {
                         Text("Информация", fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                             color = NexoryColors.TextSecondary, letterSpacing = 0.5.sp)
+                        // Ник — первой строкой информации
+                        user.username.takeIf { it.isNotBlank() }?.let { InfoTextRow("Никнейм", "@$it") }
                         user.city?.takeIf { it.isNotBlank() }?.let { InfoTextRow("Город", it) }
                         user.age?.let { InfoTextRow("Возраст", "$it") }
                         user.phone?.takeIf { it.isNotBlank() }?.let { InfoTextRow("Телефон", it) }

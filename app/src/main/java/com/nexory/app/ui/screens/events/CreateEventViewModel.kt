@@ -88,6 +88,7 @@ class CreateEventViewModel @Inject constructor(
         eventType: String?,
         priceDescription: String?,
         metro: String? = null,
+        ticketUrl: String? = null,
     ) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null, invalidFields = emptySet()) }
@@ -98,17 +99,23 @@ class CreateEventViewModel @Inject constructor(
                     put("starts_at",  startsAt)
                     put("is_private", isPrivate.toString())
                     put("price",      (price ?: 0.0).toString())
-                    if (!description.isNullOrBlank()) put("description",      description)
-                    if (!category.isNullOrBlank())    put("category",         category)
                     if (!endsAt.isNullOrBlank())      put("ends_at",          endsAt)
                     if (maxParticipants != null)      put("max_participants", maxParticipants.toString())
                     // Пустая строка — это осознанное «удалить обложку», её нужно
                     // отправить; null означает «не менять» и не отправляется вовсе.
                     if (coverUrl != null)             put("cover_url",        coverUrl)
-                    if (!skillLevel.isNullOrBlank())  put("skill_level",      skillLevel)
-                    if (!eventType.isNullOrBlank())   put("event_type",       eventType)
-                    if (!priceDescription.isNullOrBlank()) put("price_description", priceDescription)
-                    if (!metro.isNullOrBlank())       put("metro",            metro)
+                    // Остальные текстовые поля тоже отправляем всегда — см. комментарий ниже
+                    put("description",       description ?: "")
+                    put("category",          category ?: "")
+                    put("skill_level",       skillLevel ?: "")
+                    put("event_type",        eventType ?: "")
+                    put("price_description", priceDescription ?: "")
+                    // Текстовые поля отправляем ВСЕГДА, включая пустую строку:
+                    // на сервере '' означает «очистить», а отсутствие поля —
+                    // «не менять». Раньше пустые значения не отправлялись,
+                    // и очистить поле при редактировании было невозможно.
+                    put("metro",             metro ?: "")
+                    put("ticket_url",        ticketUrl ?: "")
                 }
                 // Берём мероприятие из ОТВЕТА сервера, а не полагаемся на локальные
                 // значения формы: так экран и кэш получают ровно то, что реально

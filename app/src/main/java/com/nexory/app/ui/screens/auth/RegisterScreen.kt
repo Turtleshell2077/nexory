@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.nexory.app.navigation.Screen
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import com.nexory.app.ui.components.nexoryTextFieldColors
 import com.nexory.app.ui.components.LegalFooter
@@ -73,7 +74,7 @@ fun RegisterScreen(
             // Поле: Имя пользователя
             OutlinedTextField(
                 value = username, onValueChange = { username = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollOnFocus(),
                 label = { Text("Имя пользователя *") },
                 leadingIcon = { Icon(Icons.Default.Person, null) },
                 singleLine = true,
@@ -85,7 +86,7 @@ fun RegisterScreen(
             // Email
             OutlinedTextField(
                 value = email, onValueChange = { email = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollOnFocus(),
                 label = { Text("Email *") },
                 leadingIcon = { Icon(Icons.Default.Email, null) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -98,7 +99,7 @@ fun RegisterScreen(
             // Телефон (опционально)
             OutlinedTextField(
                 value = phone, onValueChange = { phone = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollOnFocus(),
                 label = { Text("Телефон (необязательно)") },
                 leadingIcon = { Icon(Icons.Default.Phone, null) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -111,7 +112,7 @@ fun RegisterScreen(
             // Пароль
             OutlinedTextField(
                 value = password, onValueChange = { password = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollOnFocus(),
                 label = { Text("Пароль *") },
                 leadingIcon = { Icon(Icons.Default.Lock, null) },
                 trailingIcon = {
@@ -127,7 +128,7 @@ fun RegisterScreen(
             // Подтверждение пароля
             OutlinedTextField(
                 value = confirm, onValueChange = { confirm = it },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().scrollOnFocus(),
                 label = { Text("Повтори пароль *") },
                 leadingIcon = { Icon(Icons.Default.LockOpen, null) },
                 visualTransformation = PasswordVisualTransformation(),

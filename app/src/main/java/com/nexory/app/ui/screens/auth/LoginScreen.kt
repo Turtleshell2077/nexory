@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.nexory.app.navigation.Screen
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import com.nexory.app.ui.components.nexoryTextFieldColors
 import com.nexory.app.ui.components.LegalFooter
@@ -101,7 +102,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value           = email,
                 onValueChange   = { email = it },
-                modifier        = Modifier.fillMaxWidth(),
+                modifier        = Modifier.fillMaxWidth().scrollOnFocus(),
                 label           = { Text("Email") },
                 leadingIcon     = { Icon(Icons.Default.Email, null) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -115,7 +116,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value         = password,
                 onValueChange = { password = it },
-                modifier      = Modifier.fillMaxWidth(),
+                modifier      = Modifier.fillMaxWidth().scrollOnFocus(),
                 label         = { Text("Пароль") },
                 leadingIcon   = { Icon(Icons.Default.Lock, null) },
                 trailingIcon  = {

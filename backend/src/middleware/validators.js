@@ -29,11 +29,19 @@ module.exports = {
             body('max_participants').optional({ checkFalsy: true }).isInt({ min: 1, max: 100000 }),
             body('price').optional({ checkFalsy: true }).isFloat({ min: 0 }),
             body('description').optional({ checkFalsy: true }).isLength({ max: 5000 }),
+            // Ссылка на покупку билета — только http/https, чтобы из приложения
+            // нельзя было открыть произвольную схему (intent:, file: и т.п.)
+            body('ticket_url').optional({ checkFalsy: true })
+                .isURL({ protocols: ['http', 'https'], require_protocol: true })
+                .withMessage('Укажите корректную ссылку, начиная с https://'),
         ],
         update: [
             body('title').optional({ checkFalsy: true }).isLength({ max: 200 }),
             body('max_participants').optional({ checkFalsy: true }).isInt({ min: 1, max: 100000 }),
             body('price').optional({ checkFalsy: true }).isFloat({ min: 0 }),
+            body('ticket_url').optional({ checkFalsy: true })
+                .isURL({ protocols: ['http', 'https'], require_protocol: true })
+                .withMessage('Укажите корректную ссылку, начиная с https://'),
         ],
     },
 

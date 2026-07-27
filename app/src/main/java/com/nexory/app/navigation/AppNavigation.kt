@@ -68,13 +68,6 @@ sealed class Screen(val route: String) {
     /** Согласие с политикой конфиденциальности — обязательно ДО входа/регистрации (RuStore). */
     object Consent : Screen("consent")
 
-    /** Шаг 1 выбора аватара-заглушки — выбор шаблона. */
-    object AvatarStyle : Screen("avatar_style")
-
-    /** Шаг 2 — выбор цвета внутри выбранного шаблона. */
-    object AvatarVariant : Screen("avatar_variant/{styleId}") {
-        fun route(styleId: String) = "avatar_variant/$styleId"
-    }
 }
 
 // Экраны, доступные неавторизованному пользователю. Используется в редиректах ниже,
@@ -224,20 +217,8 @@ fun AppNavHost(
             EditProfileScreen(navController = navController)
         }
 
-        // ---- Выбор аватара-заглушки: шаблон → цвет ----
-        composable(Screen.AvatarStyle.route) {
-            com.nexory.app.ui.screens.profile.AvatarStyleScreen(navController = navController)
-        }
-        composable(
-            route     = Screen.AvatarVariant.route,
-            arguments = listOf(navArgument("styleId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val styleId = backStackEntry.arguments?.getString("styleId") ?: return@composable
-            com.nexory.app.ui.screens.profile.AvatarVariantScreen(
-                navController = navController,
-                styleId = styleId,
-            )
-        }
+        // Экраны выбора оформления аватара убраны: без фотографии пользователь
+        // получает градиент, подобранный по его id, — выбирать нечего.
     }
 
     // Централизованное управление навигацией:

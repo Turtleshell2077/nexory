@@ -18,6 +18,7 @@ async function migrate() {
         '011_event_metro.sql',
         '012_username_unique_ci.sql',
         '013_user_status.sql',
+        '014_event_ticket_url.sql',
     ];
 
     for (const file of migrations) {

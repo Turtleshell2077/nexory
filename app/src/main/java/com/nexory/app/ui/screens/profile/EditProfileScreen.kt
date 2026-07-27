@@ -286,56 +286,28 @@ fun EditProfileScreen(
                     Icon(Icons.Default.QuestionMark, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(11.dp))
                 }
             }
-            // Подсказки по вводу — НАД полем, единообразно с полем метро.
-            // Раньше список был под полем и при открытой клавиатуре уходил под неё.
-            val q = interestQuery.trim()
-            val suggestions = if (q.isBlank()) emptyList()
+            // Автоподбор через общий компонент: список рисуется всплывающим окном
+            // НАД полем и на разметку не влияет, поэтому поле с набранным текстом
+            // всегда остаётся на экране и ничего не смещается.
+            val interestSuggestions = remember(interestQuery, interests.size) {
+                val q = interestQuery.trim()
+                if (q.isBlank()) emptyList()
                 else INTERESTS.filter { it.contains(q, ignoreCase = true) && it !in interests }.take(6)
-            // Можно добавить своё увлечение, даже если его нет в списке
-            val canAddCustom = q.isNotBlank() &&
-                interests.none { it.equals(q, ignoreCase = true) } &&
-                INTERESTS.none { it.equals(q, ignoreCase = true) }
-            if (suggestions.isNotEmpty() || canAddCustom) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 200.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(NexoryColors.SurfaceDark)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    suggestions.forEach { s ->
-                        Text(
-                            s,
-                            color = NexoryColors.TextPrimary,
-                            fontSize = 14.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { interests.add(s); interestQuery = "" }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                        )
-                    }
-                    if (canAddCustom) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { interests.add(q); interestQuery = "" }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Default.Add, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Добавить «$q»", color = NexoryColors.PrimaryBlue, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
             }
-
-            // Поле ввода идёт ПОСЛЕ подсказок — так список всегда выше поля
-            ProfileField(
+            com.nexory.app.ui.components.AutocompleteTextField(
                 value = interestQuery,
                 onValueChange = { interestQuery = it },
+                suggestions = interestSuggestions,
+                onSuggestionPick = { picked ->
+                    if (picked !in interests) interests.add(picked)
+                    interestQuery = ""
+                },
                 placeholder = "Начни вводить и выбери из списка",
+                allowCustomValue = true,
+                onCustomValueAdd = { custom ->
+                    if (interests.none { it.equals(custom, ignoreCase = true) }) interests.add(custom)
+                    interestQuery = ""
+                },
             )
 
             // Выбранные увлечения чипами
@@ -425,18 +397,12 @@ fun EditProfileScreen(
             currentUrl = avatarUrl.ifBlank { null },
             userName = displayName.ifBlank { username },
             onPickPhoto = { imagePicker.launch("image/*") },
-            onPickPreset = { preset ->
-                previewUri = null
-                avatarUrl = preset
-                avatarError = null
-            },
             onRemove = {
                 previewUri = null
                 // Пустая строка = «удалить» для бэкенда (null означал бы «не менять»)
                 avatarUrl = ""
                 avatarError = null
             },
-            onOpenStylePicker = { navController.navigate(com.nexory.app.navigation.Screen.AvatarStyle.route) },
             onDismiss = { showAvatarDialog = false },
         )
     }

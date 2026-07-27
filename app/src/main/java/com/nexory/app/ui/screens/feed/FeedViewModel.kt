@@ -25,7 +25,6 @@ data class FeedUiState(
     val category:    String?        = null,
     val location:    String         = "",
     val sort:        String         = "soon",
-    val freeOnly:    Boolean        = false,
     val maxPrice:    Int?           = null,
     val level:       String?        = null,   // категория профессионализма
     val metro:       String         = "",     // ближайшее метро
@@ -40,7 +39,7 @@ data class FeedUiState(
 ) {
     val activeFilterCount: Int
         get() = listOf(
-            location.isNotBlank(), sort != "soon", freeOnly, maxPrice != null,
+            location.isNotBlank(), sort != "soon", maxPrice != null,
             level != null, metro.isNotBlank(), selectedInterests.isNotEmpty(),
         ).count { it }
 }
@@ -148,7 +147,6 @@ class FeedViewModel @Inject constructor(
                     search   = state.searchQuery.takeIf { it.isNotBlank() },
                     location = state.location.takeIf { it.isNotBlank() },
                     sort     = state.sort,
-                    freeOnly = if (state.freeOnly) "true" else null,
                     maxPrice = state.maxPrice?.toString(),
                     level    = state.level,
                     metro    = state.metro.takeIf { it.isNotBlank() },
@@ -245,7 +243,6 @@ class FeedViewModel @Inject constructor(
     fun setCategory(category: String?) { _uiState.update { it.copy(category = category) }; loadAll() }
     fun setLocation(location: String) { _uiState.update { it.copy(location = location) }; debouncedAll() }
     fun setSort(sort: String) { _uiState.update { it.copy(sort = sort) }; loadAll() }
-    fun setFreeOnly(free: Boolean) { _uiState.update { it.copy(freeOnly = free) }; loadAll() }
     fun setMaxPrice(maxPrice: Int?) { _uiState.update { it.copy(maxPrice = maxPrice) }; debouncedAll() }
     fun setLevel(level: String?) { _uiState.update { it.copy(level = level) }; loadAll() }
     fun setMetro(metro: String) { _uiState.update { it.copy(metro = metro) }; debouncedAll() }
@@ -276,7 +273,7 @@ class FeedViewModel @Inject constructor(
 
     fun resetFilters() {
         _uiState.update { it.copy(
-            location = "", sort = "soon", freeOnly = false, maxPrice = null, category = null,
+            location = "", sort = "soon", maxPrice = null, category = null,
             level = null, metro = "", selectedInterests = emptySet(),
         ) }
         loadAll()

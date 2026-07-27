@@ -48,7 +48,7 @@ const SELECT_COLS = `
     e.id, e.title, e.description, e.address,
     e.cover_url, e.category, e.starts_at, e.ends_at,
     e.max_participants, e.is_private, e.price, e.skill_level,
-    e.event_type, e.price_description, e.metro, e.created_at,
+    e.event_type, e.price_description, e.metro, e.ticket_url, e.created_at,
     u.id   AS creator_id,
     u.username AS creator_username,
     u.avatar_url AS creator_avatar,
@@ -200,7 +200,7 @@ const createEvent = async (req, res) => {
     const {
         title, description, address, latitude, longitude,
         cover_url, category, max_participants, starts_at, ends_at, is_private,
-        price, skill_level, event_type, price_description, metro
+        price, skill_level, event_type, price_description, metro, ticket_url
     } = req.body;
 
     if (containsProfanity(title) || containsProfanity(description)) {
@@ -213,14 +213,15 @@ const createEvent = async (req, res) => {
                 INSERT INTO events
                     (creator_id, title, description, address, latitude, longitude,
                      cover_url, category, max_participants, starts_at, ends_at, is_private,
-                     price, skill_level, event_type, price_description, metro)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+                     price, skill_level, event_type, price_description, metro, ticket_url)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
                 RETURNING *
             `, [creatorId, title, description, address, latitude, longitude,
                 cover_url, category, max_participants || null, starts_at, ends_at || null,
                 is_private === true || is_private === 'true',
                 price ? parseFloat(price) : 0, skill_level || null,
-                event_type || null, price_description || null, metro || null]);
+                event_type || null, price_description || null, metro || null,
+                ticket_url || null]);
 
             const event = eventRes.rows[0];
 
@@ -366,7 +367,7 @@ const updateEvent = async (req, res) => {
     const {
         title, description, address, cover_url, category,
         max_participants, starts_at, ends_at, is_private, price, skill_level,
-        event_type, price_description, metro
+        event_type, price_description, metro, ticket_url
     } = req.body;
 
     try {
@@ -390,19 +391,25 @@ const updateEvent = async (req, res) => {
         const result = await query(`
             UPDATE events SET
                 title            = COALESCE($1, title),
-                description      = COALESCE($2, description),
+                description      = NULLIF(COALESCE($2, description), ''),
                 address          = COALESCE($3, address),
                 cover_url        = COALESCE($4, cover_url),
-                category         = COALESCE($5, category),
+                category         = NULLIF(COALESCE($5, category), ''),
                 max_participants = $6,
                 starts_at        = COALESCE($7, starts_at),
                 ends_at          = $8,
                 is_private       = COALESCE($9, is_private),
                 price            = COALESCE($10::numeric, price),
-                skill_level      = $11,
-                event_type       = $12,
-                price_description = $13,
-                metro            = $14,
+                -- NULLIF(..., '') превращает пустую строку в NULL уже ПОСЛЕ COALESCE:
+                -- поле не пришло  → COALESCE вернёт старое значение («не менять»)
+                -- пришла ''       → NULLIF обнулит («очистить»)
+                -- Раньше здесь стоял голый $N без COALESCE, и любое поле, которое
+                -- клиент не прислал, молча затиралось в NULL.
+                skill_level       = NULLIF(COALESCE($11, skill_level), ''),
+                event_type        = NULLIF(COALESCE($12, event_type), ''),
+                price_description = NULLIF(COALESCE($13, price_description), ''),
+                metro             = NULLIF(COALESCE($14, metro), ''),
+                ticket_url        = NULLIF(COALESCE($17, ticket_url), ''),
                 updated_at       = NOW()
             WHERE id = $15 AND creator_id = $16
             RETURNING *
@@ -414,11 +421,14 @@ const updateEvent = async (req, res) => {
             ends_at || null,
             (is_private === true || is_private === 'true') ? true : (is_private === false || is_private === 'false' ? false : null),
             price != null && price !== '' ? parseFloat(price) : null,
-            skill_level || null,
-            event_type || null,
-            price_description || null,
-            metro || null,
+            // Те же правила, что и в профиле: undefined → null («не менять»),
+            // '' → '' («очистить», NULLIF выше превратит в NULL).
+            skill_level === undefined ? null : String(skill_level),
+            event_type === undefined ? null : String(event_type),
+            price_description === undefined ? null : String(price_description),
+            metro === undefined ? null : String(metro),
             eventId, userId,
+            ticket_url === undefined ? null : String(ticket_url),
         ]);
 
         if (result.rows.length === 0) {

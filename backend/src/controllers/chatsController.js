@@ -11,7 +11,17 @@ const getMyChats = async (req, res) => {
         // unread_count — сколько сообщений после last_read_at.
         const result = await query(`
             SELECT
-                c.id, c.type, c.event_id, c.avatar_url,
+                c.id, c.type, c.event_id,
+                -- Обложка чата мероприятия по умолчанию — фото самого мероприятия.
+                -- Свою обложку (c.avatar_url) организатор может задать отдельно,
+                -- она имеет приоритет. Если нет ни того, ни другого, клиент рисует
+                -- градиентную заглушку — тот же принцип, что и у аватаров.
+                COALESCE(
+                    c.avatar_url,
+                    CASE WHEN c.type = 'event'
+                         THEN (SELECT e.cover_url FROM events e WHERE e.id = c.event_id)
+                    END
+                ) AS avatar_url,
                 cm.last_read_at,
  
                 -- Для direct-чата получаем данные собеседника

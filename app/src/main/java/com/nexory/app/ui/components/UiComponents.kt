@@ -123,10 +123,7 @@ fun UserAvatar(
     size:     Dp,
     modifier: Modifier = Modifier,
 ) {
-    val selection = AvatarPresets.parse(url)
-
-    if (!url.isNullOrBlank() && selection == null) {
-        // Настоящая фотография
+    if (AvatarPresets.isRealPhoto(url)) {
         AsyncImage(
             model = url,
             contentDescription = null,
@@ -134,24 +131,35 @@ fun UserAvatar(
             modifier = modifier.size(size).clip(CircleShape).background(NexoryColors.SurfaceMid),
         )
     } else {
+        // Фото нет (или в БД осталась строка от прежней версии с шаблонами) —
+        // рисуем градиент. Палитра и инициалы детерминированы, поэтому считаем
+        // их один раз на ключ, а не на каждую рекомпозицию: аватары рисуются
+        // в длинных списках друзей и чатов.
         val key = (seed ?: name ?: "?")
-        // Выбор и инициалы детерминированы — считаем один раз, а не на каждую
-        // рекомпозицию (аватары рисуются в длинных списках).
-        val resolved = remember(key, selection) {
-            selection ?: AvatarPresets.defaultSelectionForKey(key)
-        }
+        val palette = remember(key) { AvatarPresets.paletteForKey(key) }
         val initials = remember(name) { AvatarPresets.initialsOf(name) }
-        GeneratedAvatar(
-            selection = resolved,
-            initials = initials,
-            size = size,
-            modifier = modifier,
-        )
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(palette)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = initials,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.38f).sp,
+            )
+        }
     }
 }
 
+
 // -------------------------------------------------------
-// Поле выбора станции метро с автоподбором (метро Москвы)
+// Поле выбора станции метро с автоподбором (метро Москвы).
+// Вся механика автоподбора живёт в общем AutocompleteTextField —
+// здесь остаётся только источник подсказок.
 // -------------------------------------------------------
 @Composable
 fun MetroAutocompleteField(
@@ -159,100 +167,20 @@ fun MetroAutocompleteField(
     onChange: (String) -> Unit,
     label:    String = "Начните вводить станцию",
 ) {
-    // Показываем подсказки только когда пользователь печатает (а не после выбора)
-    var showSuggestions by remember { mutableStateOf(false) }
-    // remember(value, showSuggestions) обязателен: без него фильтрация ~300 станций
-    // выполнялась на КАЖДОЙ рекомпозиции этого поля, а не только при смене текста.
-    val suggestions = remember(value, showSuggestions) {
-        if (showSuggestions) MoscowMetro.suggest(value) else emptyList()
-    }
+    // remember обязателен: без него фильтрация ~300 станций выполнялась бы
+    // на каждой рекомпозиции, а не только при изменении текста
+    val suggestions = remember(value) { MoscowMetro.suggest(value) }
 
-    val showList = suggestions.isNotEmpty() &&
-            !(suggestions.size == 1 && suggestions[0] == value)
-
-    // Ширину поля запоминаем, чтобы всплывающий список был ровно по нему
-    var fieldWidthPx by remember { mutableStateOf(0) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // Список подсказок — всплывающее окно НАД полем ввода.
-        //
-        // Почему Popup, а не элемент в Column: обычный элемент занимает место в
-        // разметке и толкает поле вниз — под клавиатуру. Popup рисуется поверх и
-        // на разметку не влияет, поэтому и поле с набранным текстом, и клавиатура
-        // остаются на месте, а список просто «выезжает» над полем.
-        if (showList) {
-            // Позиционер поднимает список ровно на его собственную высоту над полем.
-            // Если сверху не хватает места, прижимаем к верху экрана, а не за него.
-            val abovePositionProvider = remember {
-                object : androidx.compose.ui.window.PopupPositionProvider {
-                    override fun calculatePosition(
-                        anchorBounds: androidx.compose.ui.unit.IntRect,
-                        windowSize: androidx.compose.ui.unit.IntSize,
-                        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-                        popupContentSize: androidx.compose.ui.unit.IntSize,
-                    ): androidx.compose.ui.unit.IntOffset {
-                        val gap = 8
-                        val y = (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(0)
-                        return androidx.compose.ui.unit.IntOffset(anchorBounds.left, y)
-                    }
-                }
-            }
-            androidx.compose.ui.window.Popup(
-                popupPositionProvider = abovePositionProvider,
-                // focusable = false — клавиатура не должна закрываться при показе списка
-                properties = androidx.compose.ui.window.PopupProperties(focusable = false),
-                onDismissRequest = { showSuggestions = false },
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(with(density) { fieldWidthPx.toDp() })
-                        // Ограничение высоты: иначе длинный список перекрывает
-                        // пол-экрана. Видно ~4 строки, остальные — прокруткой.
-                        .heightIn(max = 176.dp)
-                        .background(NexoryColors.SurfaceMid, RoundedCornerShape(12.dp)),
-                ) {
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        suggestions.forEach { station ->
-                            Text(
-                                station,
-                                color = NexoryColors.TextPrimary,
-                                fontSize = 14.sp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showSuggestions = false; onChange(station) }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        OutlinedTextField(
-            value = value,
-            onValueChange = { showSuggestions = true; onChange(it) },
-            modifier = Modifier
-                .fillMaxWidth()
-                // Запоминаем ширину, чтобы всплывающий список был ровно по полю
-                .onSizeChanged { fieldWidthPx = it.width }
-                // Поле само поднимается над клавиатурой при фокусе
-                .scrollOnFocus(),
-            placeholder = { Text(label, color = NexoryColors.TextSecondary) },
-            leadingIcon = { Icon(Icons.Default.Place, null) },
-            trailingIcon = {
-                if (value.isNotEmpty()) {
-                    IconButton(onClick = { showSuggestions = false; onChange("") }) {
-                        Icon(Icons.Default.Close, "Очистить", tint = NexoryColors.TextSecondary)
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            colors = nexoryTextFieldColors(),
-        )
-    }
+    AutocompleteTextField(
+        value = value,
+        onValueChange = onChange,
+        suggestions = suggestions,
+        onSuggestionPick = onChange,
+        placeholder = label,
+        leadingIcon = Icons.Default.Place,
+    )
 }
+
 
 // -------------------------------------------------------
 // Метка секции в формах

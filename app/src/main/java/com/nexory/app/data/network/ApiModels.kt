@@ -76,6 +76,8 @@ data class EventDto(
     @SerializedName("event_type")        val eventType:       String? = null,
     @SerializedName("price_description") val priceDescription: String? = null,
     val metro:       String?  = null,
+    /** Ссылка на покупку билета — только для платных мероприятий. */
+    @SerializedName("ticket_url")        val ticketUrl:       String? = null,
     @SerializedName("created_at")        val createdAt:       String? = null,
     val status:      String   = "active",
     // Создатель — denormalized для удобства UI

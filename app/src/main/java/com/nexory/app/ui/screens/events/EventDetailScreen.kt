@@ -38,6 +38,7 @@ fun EventDetailScreen(
     eventId: String,
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showPriceInfo by remember { mutableStateOf(false) }
@@ -289,6 +290,32 @@ fun EventDetailScreen(
                                     }
                                     Text(formatPrice(event.price), color = NexoryColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 }
+                                // Ссылка на покупку билета — только у платных мероприятий
+                                event.ticketUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                                    HorizontalDivider(color = NexoryColors.SurfaceMid, thickness = 0.5.dp)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(NexoryColors.PrimaryBlue.copy(alpha = 0.12f))
+                                            .clickable {
+                                                com.nexory.app.ui.components.openExternalUrl(context, url)
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(Icons.Default.ConfirmationNumber, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(
+                                            "Купить билет",
+                                            color = NexoryColors.PrimaryBlue,
+                                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Icon(Icons.Default.OpenInNew, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+
                                 // Дата создания — ненавязчиво, отдельной строкой снизу
                                 formatCreatedAt(event.createdAt).takeIf { it.isNotBlank() }?.let {
                                     HorizontalDivider(color = NexoryColors.SurfaceMid, thickness = 0.5.dp)

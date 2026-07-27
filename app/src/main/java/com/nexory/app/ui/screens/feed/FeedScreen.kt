@@ -47,6 +47,7 @@ import com.nexory.app.ui.screens.events.EVENT_CATEGORIES
 import com.nexory.app.ui.screens.events.SKILL_LEVELS
 import com.nexory.app.ui.screens.events.formatEventDateTime
 import com.nexory.app.ui.screens.events.formatPrice
+import com.nexory.app.ui.screens.events.isEventFinished
 import com.nexory.app.ui.theme.NexoryColors
 import kotlinx.coroutines.launch
 
@@ -134,49 +135,20 @@ fun FeedScreen(
                     Spacer(Modifier.height(16.dp))
                     Text("Сортировка", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
                     Spacer(Modifier.height(8.dp))
+                    // Формулировки развели явно: «ближайшие» — про дату проведения,
+                    // «новые» — про момент публикации. Раньше одна размытая подпись
+                    // не давала понять, о чём речь.
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CategoryChip("Сначала ближайшие", uiState.sort == "soon") { viewModel.setSort("soon") }
-                        CategoryChip("Сначала новые", uiState.sort == "new") { viewModel.setSort("new") }
+                        CategoryChip("Сначала ближайшие по дате", uiState.sort == "soon") { viewModel.setSort("soon") }
+                        CategoryChip("Сначала недавно созданные", uiState.sort == "new") { viewModel.setSort("new") }
                     }
 
+                    // Цена одним элементом: отдельный переключатель «Только бесплатные»
+                    // убран — он дублировал крайнее левое положение шкалы.
                     Spacer(Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Только бесплатные", fontSize = 14.sp, color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = uiState.freeOnly,
-                            onCheckedChange = { viewModel.setFreeOnly(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = NexoryColors.PrimaryBlue,
-                                uncheckedTrackColor = NexoryColors.SurfaceMid,
-                            )
-                        )
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-                    Text("Максимальная цена (₽)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
-                    Spacer(Modifier.height(8.dp))
-                    var maxPriceText by remember { mutableStateOf(uiState.maxPrice?.toString() ?: "") }
-                    OutlinedTextField(
-                        value = maxPriceText,
-                        onValueChange = {
-                            maxPriceText = it.filter { c -> c.isDigit() }
-                            viewModel.setMaxPrice(maxPriceText.toIntOrNull())
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("До какой цены готов пойти", color = NexoryColors.TextSecondary) },
-                        singleLine = true,
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor      = NexoryColors.PrimaryBlue,
-                            unfocusedBorderColor    = NexoryColors.SurfaceMid,
-                            focusedContainerColor   = NexoryColors.SurfaceMid,
-                            unfocusedContainerColor = NexoryColors.SurfaceMid,
-                            cursorColor             = NexoryColors.PrimaryBlue,
-                            focusedTextColor        = NexoryColors.TextPrimary,
-                            unfocusedTextColor      = NexoryColors.TextPrimary,
-                        ),
+                    PriceFilter(
+                        maxPrice = uiState.maxPrice,
+                        onChange = { viewModel.setMaxPrice(it) },
                     )
 
                     Spacer(Modifier.height(16.dp))
@@ -189,139 +161,21 @@ fun FeedScreen(
                         }
                     }
 
-                    // Фильтр по увлечениям
-                    Spacer(Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Увлечения", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f))
-                        // Очистить только увлечения, не сбрасывая остальные фильтры
-                        if (uiState.selectedInterests.isNotEmpty()) {
-                            TextButton(onClick = { viewModel.clearInterests() }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-                                Text("Очистить", color = NexoryColors.TextSecondary, fontSize = 12.sp)
-                            }
-                        }
-                        if (uiState.myInterests.isNotEmpty()) {
-                            TextButton(onClick = { viewModel.useMyProfileInterests() }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-                                Icon(Icons.Default.Person, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(15.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Мои увлечения", color = NexoryColors.PrimaryBlue, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    // Поле ввода нового увлечения
-                    var interestInput by remember { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = interestInput,
-                        onValueChange = { interestInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        placeholder = { Text("Например: футбол, музыка…", color = NexoryColors.TextSecondary) },
-                        leadingIcon = { Icon(Icons.Default.Interests, null, tint = NexoryColors.TextSecondary) },
-                        trailingIcon = {
-                            if (interestInput.isNotBlank()) {
-                                IconButton(onClick = { viewModel.addInterest(interestInput); interestInput = "" }) {
-                                    Icon(Icons.Default.Add, "Добавить", tint = NexoryColors.PrimaryBlue)
-                                }
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor      = NexoryColors.PrimaryBlue,
-                            unfocusedBorderColor    = NexoryColors.SurfaceMid,
-                            focusedContainerColor   = NexoryColors.SurfaceMid,
-                            unfocusedContainerColor = NexoryColors.SurfaceMid,
-                            cursorColor             = NexoryColors.PrimaryBlue,
-                            focusedTextColor        = NexoryColors.TextPrimary,
-                            unfocusedTextColor      = NexoryColors.TextPrimary,
-                        ),
+                    // ---- Увлечения: две равноправные вкладки ----
+                    // Раньше личные увлечения были вложенной раскрывающейся панелью
+                    // внутри общего списка — иерархия сбивала с толку. Теперь это
+                    // два самостоятельных раздела на одном уровне.
+                    Spacer(Modifier.height(18.dp))
+                    InterestsFilterSection(
+                        allInterests = INTERESTS,
+                        myInterests = uiState.myInterests,
+                        selected = uiState.selectedInterests,
+                        onToggle = { viewModel.toggleInterest(it) },
+                        onSelectAllMine = { viewModel.useMyProfileInterests() },
+                        onClearMine = { viewModel.clearInterests() },
+                        onAddCustom = { viewModel.addInterest(it) },
                     )
-                    // Секция «Мои увлечения» — свёрнута по умолчанию и отделена от
-                    // общего списка. Раньше личные интересы показывались вперемешку
-                    // со всеми остальными, и было непонятно, что откуда взялось.
-                    if (uiState.myInterests.isNotEmpty()) {
-                        Spacer(Modifier.height(10.dp))
-                        var myInterestsExpanded by remember { mutableStateOf(false) }
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(NexoryColors.SurfaceMid),
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { myInterestsExpanded = !myInterestsExpanded }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(Icons.Default.Person, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("Мои увлечения", color = NexoryColors.TextPrimary, fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                                Text("${uiState.myInterests.size}", color = NexoryColors.TextSecondary, fontSize = 13.sp)
-                                Spacer(Modifier.width(6.dp))
-                                Icon(
-                                    if (myInterestsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = if (myInterestsExpanded) "Свернуть" else "Раскрыть",
-                                    tint = NexoryColors.TextSecondary,
-                                )
-                            }
-                            if (myInterestsExpanded) {
-                                Column(modifier = Modifier.padding(horizontal = 14.dp).padding(bottom = 14.dp)) {
-                                    // «Выбрать все» первым пунктом раскрытого списка
-                                    val allSelected = uiState.myInterests.all { it in uiState.selectedInterests }
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                if (allSelected) viewModel.clearInterests()
-                                                else viewModel.useMyProfileInterests()
-                                            }
-                                            .padding(vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            if (allSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                                            null,
-                                            tint = if (allSelected) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            if (allSelected) "Снять выбор" else "Выбрать все",
-                                            color = NexoryColors.PrimaryBlue, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                                        )
-                                    }
-                                    Spacer(Modifier.height(6.dp))
-                                    FlowRowChips(
-                                        items = uiState.myInterests,
-                                        selected = uiState.selectedInterests,
-                                        onToggle = { viewModel.toggleInterest(it) },
-                                    )
-                                }
-                            }
-                        }
-                    }
 
-                    // Общий список: всё, что уже выбрано вручную, плюс популярные варианты.
-                    // Личные увлечения сюда намеренно НЕ подмешиваются — они в секции выше.
-                    val generalOptions = remember(uiState.selectedInterests, uiState.myInterests) {
-                        (uiState.selectedInterests.toList() + INTERESTS)
-                            .distinct()
-                            .filter { item -> uiState.myInterests.none { it.equals(item, ignoreCase = true) } }
-                            .take(24)
-                    }
-                    if (generalOptions.isNotEmpty()) {
-                        Spacer(Modifier.height(10.dp))
-                        Text("Все увлечения", fontSize = 12.sp, color = NexoryColors.TextSecondary)
-                        Spacer(Modifier.height(6.dp))
-                        FlowRowChips(
-                            items = generalOptions,
-                            selected = uiState.selectedInterests,
-                            onToggle = { viewModel.toggleInterest(it) },
-                        )
-                    }
 
                     Spacer(Modifier.height(16.dp))
                     Text("Категория профессионализма", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = NexoryColors.TextPrimary)
@@ -629,6 +483,262 @@ private fun CategoryChip(label: String, active: Boolean, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Фильтр по увлечениям: две равноправные вкладки.
+ *
+ *  «Увлечения»     — общий список всех доступных вариантов плюс поиск с
+ *                    возможностью добавить своё.
+ *  «Мои увлечения» — то, что пользователь указал в профиле, с кнопками
+ *                    выбрать все / снять все.
+ *
+ * Вкладки на одном уровне, а не вложены друг в друга: раньше личные интересы
+ * были свёрнутой панелью внутри общего списка, и было неочевидно, где что.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun InterestsFilterSection(
+    allInterests: List<String>,
+    myInterests: List<String>,
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+    onSelectAllMine: () -> Unit,
+    onClearMine: () -> Unit,
+    onAddCustom: (String) -> Unit,
+) {
+    var tab by remember { mutableStateOf(0) }
+    var query by remember { mutableStateOf("") }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Увлечения",
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f),
+            )
+            if (selected.isNotEmpty()) {
+                Text(
+                    "Выбрано: ${selected.size}",
+                    color = NexoryColors.PrimaryBlue, fontSize = 12.sp,
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+
+        // Переключатель вкладок — сегментированная плашка, а не TabRow:
+        // внутри модального листа TabRow смотрится тяжеловесно
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(NexoryColors.SurfaceMid)
+                .padding(3.dp),
+        ) {
+            listOf("Все увлечения", "Мои увлечения").forEachIndexed { index, title ->
+                val active = tab == index
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (active) NexoryColors.PrimaryBlue else Color.Transparent)
+                        .clickable { tab = index }
+                        .padding(vertical = 9.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        title,
+                        color = if (active) Color.White else NexoryColors.TextSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        if (tab == 0) {
+            // Поиск по общему списку. Иконки в начале поля больше нет —
+            // она не несла смысла и только съедала место.
+            val suggestions = remember(query, selected) {
+                val q = query.trim()
+                if (q.isBlank()) emptyList()
+                else allInterests.filter { it.contains(q, ignoreCase = true) && it !in selected }.take(6)
+            }
+            com.nexory.app.ui.components.AutocompleteTextField(
+                value = query,
+                onValueChange = { query = it },
+                suggestions = suggestions,
+                onSuggestionPick = { onToggle(it); query = "" },
+                placeholder = "Найти увлечение",
+                allowCustomValue = true,
+                onCustomValueAdd = { onAddCustom(it); query = "" },
+            )
+            Spacer(Modifier.height(10.dp))
+
+            // Показываем выбранные + популярные, личные сюда не подмешиваем:
+            // для них есть отдельная вкладка
+            val options = remember(selected, myInterests) {
+                (selected.toList() + allInterests).distinct().take(20)
+            }
+            FlowRowChips(items = options, selected = selected, onToggle = onToggle)
+        } else {
+            if (myInterests.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(NexoryColors.SurfaceMid)
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(Icons.Default.Interests, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Увлечения пока не указаны",
+                        color = NexoryColors.TextPrimary, fontSize = 14.sp,
+                    )
+                    Text(
+                        "Добавьте их в профиле — они появятся здесь",
+                        color = NexoryColors.TextSecondary, fontSize = 12.sp,
+                    )
+                }
+            } else {
+                val allMineSelected = myInterests.all { it in selected }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onSelectAllMine,
+                        enabled = !allMineSelected,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NexoryColors.PrimaryBlue),
+                    ) { Text("Выбрать все", fontSize = 13.sp) }
+                    OutlinedButton(
+                        onClick = onClearMine,
+                        enabled = selected.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NexoryColors.TextSecondary),
+                    ) { Text("Снять все", fontSize = 13.sp) }
+                }
+                Spacer(Modifier.height(10.dp))
+                FlowRowChips(items = myInterests, selected = selected, onToggle = onToggle)
+            }
+        }
+    }
+}
+
+/**
+ * Фильтр по цене: слайдер, у которого значение можно ещё и ввести вручную.
+ *
+ * Почему так: тащить ползунок удобно для «примерно до 1000», но неудобно, когда
+ * нужна точная сумма — поэтому по тапу на цифру открывается ввод с клавиатуры.
+ * Крайнее левое положение (0 ₽) подписано как «Только бесплатные»: прежняя
+ * отдельная кнопка делала ровно это и просто дублировала шкалу.
+ *
+ * Шкала нелинейная по шагу: до 1000 ₽ шаг 50, выше — 250. Мероприятия чаще
+ * бесплатные или недорогие, и мелкий шаг важен именно в начале шкалы.
+ */
+@Composable
+private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
+    val maxLimit = 10_000
+    var editing by remember { mutableStateOf(false) }
+    var editText by remember { mutableStateOf("") }
+
+    // null = фильтр по цене не задан, показываем ползунок в крайнем правом положении
+    val current = maxPrice ?: maxLimit
+    val isFree = maxPrice == 0
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Цена",
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f),
+            )
+            if (editing) {
+                OutlinedTextField(
+                    value = editText,
+                    onValueChange = { editText = it.filter { c -> c.isDigit() }.take(5) },
+                    modifier = Modifier.width(130.dp),
+                    singleLine = true,
+                    placeholder = { Text("₽", color = NexoryColors.TextSecondary) },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onDone = {
+                            onChange(editText.toIntOrNull()?.coerceIn(0, maxLimit))
+                            editing = false
+                        }
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = com.nexory.app.ui.components.nexoryTextFieldColors(),
+                )
+            } else {
+                // Значение — кликабельное: тап открывает точный ввод
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(NexoryColors.SurfaceMid)
+                        .clickable {
+                            editText = maxPrice?.toString() ?: ""
+                            editing = true
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        when {
+                            isFree -> "Только бесплатные"
+                            maxPrice == null -> "Любая"
+                            else -> "до $maxPrice ₽"
+                        },
+                        color = if (isFree) NexoryColors.PrimaryBlue else NexoryColors.TextPrimary,
+                        fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Default.Edit, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(13.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Slider(
+            value = current.toFloat(),
+            onValueChange = { raw ->
+                val v = raw.toInt()
+                // Округляем к «человеческим» значениям, чтобы не получалось «до 337 ₽»
+                val stepped = when {
+                    v <= 0 -> 0
+                    v < 1000 -> (v / 50) * 50
+                    else -> (v / 250) * 250
+                }
+                onChange(if (stepped >= maxLimit) null else stepped)
+            },
+            valueRange = 0f..maxLimit.toFloat(),
+            colors = SliderDefaults.colors(
+                thumbColor = NexoryColors.PrimaryBlue,
+                activeTrackColor = NexoryColors.PrimaryBlue,
+                inactiveTrackColor = NexoryColors.SurfaceMid,
+            ),
+        )
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "Только бесплатные",
+                color = if (isFree) NexoryColors.PrimaryBlue else NexoryColors.TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = if (isFree) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.weight(1f),
+            )
+            Text("Любая цена", color = NexoryColors.TextSecondary, fontSize = 11.sp)
+        }
+    }
+}
+
 // Чипы увлечений в фильтре — выбранные подсвечены и имеют крестик
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -656,6 +766,8 @@ private fun FlowRowChips(items: List<String>, selected: Set<String>, onToggle: (
 
 @Composable
 fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit) {
+    // Мероприятие уже прошло — сразу видно по карточке, открывать не нужно
+    val isFinished = remember(event.startsAt) { isEventFinished(event.startsAt) }
     Card(
         modifier  = Modifier
             .fillMaxWidth()
@@ -694,6 +806,19 @@ fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit)
             Column(modifier = Modifier.padding(16.dp)) {
                 // Бейджи: организатор, цена, уровень
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                    if (isFinished) {
+                        Box(
+                            modifier = Modifier
+                                .background(NexoryColors.SurfaceMid, RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.EventBusy, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(11.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Мероприятие завершено", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = NexoryColors.TextSecondary)
+                            }
+                        }
+                    }
                     if (ownerBadge) {
                         Box(
                             modifier = Modifier

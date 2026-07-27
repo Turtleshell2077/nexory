@@ -25,6 +25,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.nexory.app.data.network.NexoryApi
 import com.nexory.app.ui.components.nexoryTextFieldColors
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -282,7 +283,7 @@ fun DevelopmentScreen(
                 OutlinedTextField(
                     value = suggestion,
                     onValueChange = { suggestion = it; viewModel.clearSuggestionError() },
-                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    modifier = Modifier.fillMaxWidth().height(120.dp).scrollOnFocus(),
                     placeholder = { Text("Что можно улучшить или добавить?", color = NexoryColors.TextSecondary) },
                     isError = suggestionError != null,
                     shape = RoundedCornerShape(12.dp),

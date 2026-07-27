@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.nexory.app.ui.components.nexoryTextFieldColors
+import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import androidx.compose.material3.ExperimentalMaterial3Api
 
@@ -163,7 +164,7 @@ fun SupportScreen(
             SupportSectionLabel("Категория обращения")
 
             Row(
-                modifier              = Modifier.fillMaxWidth(),
+                modifier              = Modifier.fillMaxWidth().scrollOnFocus(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 CATEGORIES.forEach { (icon, label, color) ->
@@ -189,7 +190,7 @@ fun SupportScreen(
             OutlinedTextField(
                 value         = subject,
                 onValueChange = { subject = it },
-                modifier      = Modifier.fillMaxWidth(),
+                modifier      = Modifier.fillMaxWidth().scrollOnFocus(),
                 label         = { Text("Тема *") },
                 leadingIcon   = { Icon(Icons.Default.Subject, null) },
                 singleLine    = true,

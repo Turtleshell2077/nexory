@@ -1,19 +1,9 @@
 package com.nexory.app.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -29,14 +19,14 @@ import androidx.compose.ui.unit.sp
 import com.nexory.app.ui.theme.NexoryColors
 
 /**
- * Действия с аватаром: загрузить фото, удалить фото, выбрать оформление.
+ * Действия с фотографией профиля: загрузить из галереи или удалить.
  *
- * Сам выбор оформления живёт на отдельных экранах (шаблон → цвет): внутри
- * этого листа сетка вариантов получалась тесной, а перестроение содержимого
- * при выборе дёргало экран под ним.
+ * Выбора оформления здесь намеренно нет: если фотографии нет, пользователь
+ * автоматически получает градиентный аватар, подобранный по его id. Прежний
+ * экран с шаблонами убран — он усложнял интерфейс без пользы.
  *
- * Все действия собраны здесь: раньше кнопка удаления висела прямо на экране
- * профиля и загромождала его.
+ * Все действия собраны в этом листе: раньше кнопка удаления висела прямо
+ * на экране профиля и загромождала его.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,13 +34,10 @@ fun AvatarPickerSheet(
     currentUrl: String?,
     userName: String?,
     onPickPhoto: () -> Unit,
-    onPickPreset: (String) -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
-    /** Открыть двухшаговый выбор оформления (шаблон → цвет). */
-    onOpenStylePicker: (() -> Unit)? = null,
 ) {
-    val hasPhoto = !currentUrl.isNullOrBlank() && !AvatarPresets.isPreset(currentUrl)
+    val hasPhoto = AvatarPresets.isRealPhoto(currentUrl)
     var confirmRemove by remember { mutableStateOf(false) }
 
     if (confirmRemove) {
@@ -62,8 +49,8 @@ fun AvatarPickerSheet(
             title = { Text("Удалить фото?", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Фотография будет удалена. Вместо неё другие увидят ваш аватар " +
-                        "с инициалами. Загрузить новое фото можно в любой момент.",
+                    "Фотография будет удалена. Вместо неё другие увидят цветной " +
+                        "аватар с вашими инициалами. Загрузить новое фото можно в любой момент.",
                     color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
                 )
             },
@@ -87,7 +74,6 @@ fun AvatarPickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp),
         ) {
@@ -111,17 +97,6 @@ fun AvatarPickerSheet(
                     onClick = { confirmRemove = true },
                 )
             }
-
-            Spacer(Modifier.height(8.dp))
-            // Выбор оформления вынесен в отдельный двухшаговый флоу
-            // (шаблон → цвет). Внутри листа сетка вариантов была слишком
-            // тесной, а при выборе экран под ней перестраивался и прыгал.
-            ActionRow(
-                icon = Icons.Default.Palette,
-                title = "Выбрать стиль аватара",
-                subtitle = "Шаблон и цвет вместо фотографии",
-                onClick = { onOpenStylePicker?.invoke(); onDismiss() },
-            )
         }
     }
 }
