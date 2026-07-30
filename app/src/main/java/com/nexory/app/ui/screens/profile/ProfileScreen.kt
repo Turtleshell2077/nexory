@@ -305,7 +305,7 @@ fun ProfileScreen(
                 ProfileMenuItem(
                     icon    = Icons.Default.SupportAgent,
                     label   = "Поддержка",
-                    color   = NexoryColors.LightViolet,
+                    color   = NexoryColors.AccentText,
                     onClick = { navController.navigate(Screen.Support.route) },
                 )
                 Spacer(Modifier.height(8.dp))

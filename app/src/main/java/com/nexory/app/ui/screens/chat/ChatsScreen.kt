@@ -89,6 +89,11 @@ fun ChatsScreen(
                                 leadingIcon = { Icon(Icons.Default.Edit, null) },
                             )
                             DropdownMenuItem(
+                                text = { Text("Создать группу") },
+                                onClick = { menuOpen = false; navController.navigate(Screen.NewGroup.route) },
+                                leadingIcon = { Icon(Icons.Default.Groups, null) },
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Открыть архив") },
                                 onClick = { menuOpen = false; navController.navigate(Screen.Archive.route) },
                                 leadingIcon = { Icon(Icons.Default.Archive, null) },
@@ -135,6 +140,16 @@ fun ChatsScreen(
     }
 }
 
+// Русское склонение: 1 участник, 2 участника, 5 участников
+private fun plural(n: Int, one: String, few: String, many: String): String {
+    val mod10 = n % 10; val mod100 = n % 100
+    return when {
+        mod10 == 1 && mod100 != 11 -> one
+        mod10 in 2..4 && mod100 !in 12..14 -> few
+        else -> many
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatListItem(
@@ -148,8 +163,17 @@ fun ChatListItem(
     onDelete: () -> Unit = {},
     archiveLabel: String = "В архив",
 ) {
-    val title    = when (chat.type) { "direct" -> chat.peer?.username ?: "Чат"; "event" -> chat.eventInfo?.title ?: "Чат мероприятия"; "support" -> "Поддержка"; else -> "Чат" }
-    val subtitle = chat.lastMessage?.content ?: "Нет сообщений"
+    val title = when (chat.type) {
+        "direct"  -> chat.peer?.username ?: "Чат"
+        "event"   -> chat.eventInfo?.title ?: "Чат мероприятия"
+        "group"   -> chat.title ?: "Группа"
+        "support" -> "Поддержка"
+        else      -> "Чат"
+    }
+    // У группы без сообщений полезнее показать состав, чем «Нет сообщений»
+    val subtitle = chat.lastMessage?.content
+        ?: if (chat.type == "group" && chat.memberCount != null) "${chat.memberCount} ${plural(chat.memberCount, "участник", "участника", "участников")}"
+           else "Нет сообщений"
     val time     = chat.lastMessage?.createdAt?.let { if (it.length >= 16) it.substring(11, 16) else "" } ?: ""
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -192,7 +216,11 @@ fun ChatListItem(
                     AsyncImage(model = avatar, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().clip(CircleShape))
                 } else {
                     Icon(
-                        if (chat.type == "support") Icons.Default.Support else Icons.Default.Event,
+                        when (chat.type) {
+                            "support" -> Icons.Default.Support
+                            "group"   -> Icons.Default.Groups
+                            else      -> Icons.Default.Event
+                        },
                         null, tint = Color.White, modifier = Modifier.size(24.dp),
                     )
                 }

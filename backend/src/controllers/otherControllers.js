@@ -1,6 +1,54 @@
 const { query, transaction } = require('../config/db');
 const { deleteUploadedFile } = require('./uploadController');
 
+// -------------------------------------------------------
+// Заявки в друзья
+// -------------------------------------------------------
+
+/**
+ * Сколько живёт неотвеченная заявка. Принятая дружба не истекает никогда —
+ * срок касается только строк со status = 'pending'.
+ *
+ * Заявка не должна пропадать сама по себе: человек может ответить и через
+ * месяц. Но и висеть вечно ей незачем — через 90 дней она снимается, и оба
+ * могут начать заново.
+ */
+const REQUEST_TTL_DAYS = 90;
+
+// Условие «связь ещё действительна»: принятая дружба — всегда, заявка — пока
+// не истёк срок. Подставляется во все места, где читается статус отношений,
+// чтобы просроченная заявка нигде не выглядела активной.
+const ALIVE = `(f.status <> 'pending' OR f.created_at > NOW() - INTERVAL '${REQUEST_TTL_DAYS} days')`;
+
+/**
+ * Статус отношений текущего пользователя с автором строки.
+ * $viewer — параметр с id смотрящего, $other — выражение с id второго человека.
+ */
+const friendStatusExpr = (viewer, other) => `
+    CASE WHEN ${other} = ${viewer} THEN 'self' ELSE COALESCE((
+        SELECT CASE
+            WHEN f.status = 'accepted'    THEN 'friends'
+            WHEN f.requester_id = ${viewer} THEN 'pending_out'
+            ELSE 'pending_in'
+        END
+        FROM friendships f
+        WHERE ((f.requester_id = ${viewer} AND f.addressee_id = ${other})
+            OR (f.addressee_id = ${viewer} AND f.requester_id = ${other}))
+          AND ${ALIVE}
+        LIMIT 1
+    ), 'none') END
+`;
+
+/** Физически убирает просроченные заявки. Вызывается по расписанию из index.js. */
+const purgeExpiredFriendRequests = async () => {
+    const r = await query(`
+        DELETE FROM friendships
+        WHERE status = 'pending' AND created_at <= NOW() - INTERVAL '${REQUEST_TTL_DAYS} days'
+    `);
+    if (r.rowCount > 0) console.log(`[friends] снято просроченных заявок: ${r.rowCount}`);
+    return r.rowCount;
+};
+
 // GET /friends
 const getFriends = async (req, res) => {
     const userId = req.user.id;
@@ -17,14 +65,15 @@ const getFriends = async (req, res) => {
     res.json({ friends: result.rows });
 };
 
-// GET /friends/requests
+// GET /friends/requests — входящие заявки (просроченные не показываем)
 const getFriendRequests = async (req, res) => {
     const userId = req.user.id;
     const result = await query(`
-        SELECT u.id, u.username, u.avatar_url, f.created_at
+        SELECT u.id, u.username, u.avatar_url, u.display_name, u.city, f.created_at
         FROM friendships f
         JOIN users u ON u.id = f.requester_id
-        WHERE f.addressee_id = $1 AND f.status = 'pending'
+        WHERE f.addressee_id = $1 AND f.status = 'pending' AND ${ALIVE}
+        ORDER BY f.created_at DESC
     `, [userId]);
     res.json({ requests: result.rows });
 };
@@ -37,13 +86,33 @@ const sendFriendRequest = async (req, res) => {
     if (requesterId === addresseeId) return res.status(400).json({ error: 'Cannot add yourself' });
 
     try {
+        // Встречная заявка — значит оба хотят дружить: сразу принимаем её,
+        // а не заводим вторую строку в обратную сторону. Раньше ON CONFLICT
+        // не срабатывал (ключ — пара в конкретном порядке), и в базе оставались
+        // две висящие заявки, которые надо было принимать по отдельности.
+        const incoming = await query(`
+            UPDATE friendships SET status = 'accepted'
+            WHERE requester_id = $1 AND addressee_id = $2 AND status = 'pending' AND created_at > NOW() - INTERVAL '${REQUEST_TTL_DAYS} days'
+            RETURNING requester_id
+        `, [addresseeId, requesterId]);
+        if (incoming.rows.length > 0) {
+            return res.status(200).json({ message: 'Friend request accepted', status: 'friends' });
+        }
+
+        // Обычная отправка. Если строка уже есть и заявка ПРОСРОЧЕНА — начинаем
+        // отсчёт заново; активную заявку повторная отправка не трогает, чтобы
+        // её нельзя было продлевать бесконечно.
         await query(`
-            INSERT INTO friendships (requester_id, addressee_id)
-            VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
+            INSERT INTO friendships (requester_id, addressee_id, status)
+            VALUES ($1, $2, 'pending')
+            ON CONFLICT (requester_id, addressee_id) DO UPDATE
+                SET created_at = NOW()
+                WHERE friendships.status = 'pending'
+                  AND friendships.created_at <= NOW() - INTERVAL '${REQUEST_TTL_DAYS} days'
         `, [requesterId, addresseeId]);
-        res.status(201).json({ message: 'Friend request sent' });
+        res.status(201).json({ message: 'Friend request sent', status: 'pending_out' });
     } catch (err) {
+        console.error('[sendFriendRequest]', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -86,7 +155,10 @@ const cancelFriendRequest = async (req, res) => {
     res.json({ message: 'Request cancelled' });
 };
 
-module.exports = { getFriends, getFriendRequests, sendFriendRequest, acceptFriendRequest, removeFriend, cancelFriendRequest };
+module.exports = {
+    getFriends, getFriendRequests, sendFriendRequest, acceptFriendRequest,
+    removeFriend, cancelFriendRequest, purgeExpiredFriendRequests,
+};
 
 
 // -------------------------------------------------------
@@ -116,8 +188,9 @@ const getProfile = async (req, res) => {
         let friendStatus = isSelf ? 'self' : 'none';
         if (!isSelf) {
             const fr = await query(`
-                SELECT requester_id, status FROM friendships
-                WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)
+                SELECT f.requester_id, f.status FROM friendships f
+                WHERE ((f.requester_id = $1 AND f.addressee_id = $2) OR (f.requester_id = $2 AND f.addressee_id = $1))
+                  AND ${ALIVE}
                 LIMIT 1
             `, [viewerId, userId]);
             if (fr.rows.length > 0) {
@@ -367,21 +440,26 @@ const searchUsers = async (req, res) => {
     if (!q || q.length < 2) return res.json({ users: [] });
 
     try {
+        // friend_status обязателен. Без него результаты поиска ничего не знали
+        // об уже отправленной заявке: после перезапуска приложения кнопка снова
+        // предлагала «Добавить», нажатие ничего не меняло (заявка-то уже есть),
+        // и со стороны выглядело так, будто заявка не сохранилась.
         const result = await query(`
-            SELECT id, username, avatar_url, bio, display_name, city, country
-            FROM users
-            WHERE LOWER(username) LIKE LOWER($1)
+            SELECT u.id, u.username, u.avatar_url, u.bio, u.display_name, u.city, u.country,
+                   ${friendStatusExpr('$3', 'u.id')} AS friend_status
+            FROM users u
+            WHERE LOWER(u.username) LIKE LOWER($1)
             ORDER BY
                 -- сначала точное совпадение, затем начинающиеся с запроса, потом остальные
                 CASE
-                    WHEN LOWER(username) = LOWER($2) THEN 0
-                    WHEN LOWER(username) LIKE LOWER($2) || '%' THEN 1
+                    WHEN LOWER(u.username) = LOWER($2) THEN 0
+                    WHEN LOWER(u.username) LIKE LOWER($2) || '%' THEN 1
                     ELSE 2
                 END,
-                LENGTH(username),
-                username
+                LENGTH(u.username),
+                u.username
             LIMIT 20
-        `, [`%${q}%`, q]);
+        `, [`%${q}%`, q, req.user.id]);
 
         res.json({ users: result.rows });
     } catch (err) {

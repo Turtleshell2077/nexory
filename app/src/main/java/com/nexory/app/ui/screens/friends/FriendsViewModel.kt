@@ -99,11 +99,17 @@ class FriendsViewModel @Inject constructor(
     }
 
     fun sendRequest(userId: String) {
-        // Оптимистично помечаем как отправленную
+        // Оптимистично помечаем как отправленную — мгновенный отклик на нажатие.
+        // Долговременное состояние приходит с сервера полем friend_status, поэтому
+        // «Заявка отправлена» переживает перезапуск приложения.
         _state.update { it.copy(sentRequests = it.sentRequests + userId) }
         viewModelScope.launch {
             try {
                 api.sendFriendRequest(mapOf("addresseeId" to userId))
+                // Заявка могла оказаться встречной и сразу стать дружбой —
+                // перечитываем, чтобы на экране было реальное положение дел
+                load()
+                search(_state.value.searchQuery)
             } catch (_: Exception) {
                 _state.update { it.copy(sentRequests = it.sentRequests - userId) }
             }
@@ -112,7 +118,11 @@ class FriendsViewModel @Inject constructor(
 
     fun acceptRequest(requesterId: String) {
         viewModelScope.launch {
-            try { api.acceptFriendRequest(mapOf("requesterId" to requesterId)); load() } catch (_: Exception) {}
+            try {
+                api.acceptFriendRequest(mapOf("requesterId" to requesterId))
+                load()
+                search(_state.value.searchQuery)
+            } catch (_: Exception) {}
         }
     }
 

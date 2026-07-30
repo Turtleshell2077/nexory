@@ -484,13 +484,15 @@ fun CreateEventScreen(
                     PlainField(
                         value = ticketUrl,
                         onValueChange = { ticketUrl = it.trim() },
-                        placeholder = "например, timepad.ru/event/123",
+                        placeholder = "https://timepad.ru/event/123",
+                        keyboardType = KeyboardType.Uri,
                         isError = !ticketUrlValid || "ticketUrl" in uiState.invalidFields,
                     )
                     Text(
-                        if (!ticketUrlValid) "Похоже, это не ссылка на сайт. Пример: timepad.ru/event/123"
+                        if (!ticketUrlValid)
+                            "Укажите полный адрес вместе с https:// — например https://timepad.ru/event/123"
                         else "Кнопка «Купить билет» появится на странице мероприятия. " +
-                            "Адрес можно вводить без https:// — допишем сами.",
+                            "Скопируйте адрес из браузера целиком, вместе с https://",
                         color = if (!ticketUrlValid) NexoryColors.Error else NexoryColors.TextSecondary,
                         fontSize = 12.sp, lineHeight = 17.sp,
                     )
@@ -630,25 +632,17 @@ fun CreateEventScreen(
     }
 }
 
-private val URL_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
-
 /**
- * Приводит ссылку к каноническому виду: «vk.com/club1» → «https://vk.com/club1».
- *
- * Люди вводят адрес так, как привыкли — без протокола. Раньше такая ссылка не
- * проходила проверку, кнопка сохранения оставалась серой, и создать платное
- * мероприятие было нельзя. Точно та же нормализация выполняется на сервере
- * (backend/src/utils/url.js) — правила должны совпадать на обеих сторонах.
+ * Готовит ссылку к отправке: убирает пробелы по краям, которые приезжают вместе
+ * со вставкой из буфера обмена. Протокол НЕ дописывается — адрес пользователь
+ * указывает полностью. Ровно то же делает сервер (backend/src/utils/url.js);
+ * правила обязаны совпадать, иначе кнопка сохранения активна, а сервер отвечает 400.
  */
-fun normalizeTicketUrl(url: String): String {
-    val t = url.trim()
-    if (t.isEmpty()) return ""
-    return if (URL_SCHEME.containsMatchIn(t)) t else "https://$t"
-}
+fun normalizeTicketUrl(url: String): String = url.trim()
 
 /**
  * Проверка ссылки на билет перед отправкой.
- * Разрешаем только http/https: иначе с страницы мероприятия можно было бы
+ * Разрешаем только http/https: иначе со страницы мероприятия можно было бы
  * открыть произвольную схему (intent:, file:) — тот же список, что и на сервере.
  */
 fun isValidTicketUrl(url: String): Boolean {
@@ -712,7 +706,19 @@ fun DateTimeWheelDialog(
     var endMin    by remember { mutableStateOf(0) }
 
     fun pad(n: Int) = n.toString().padStart(2, '0')
-    fun iso(h: Int, m: Int) = "$year-${pad(month + 1)}-${pad(day)}T${pad(h)}:${pad(m)}:00"
+
+    // Дата окончания собиралась из ТОЙ ЖЕ календарной даты, что и начало.
+    // Для мероприятия «22:00 – 02:00» это давало окончание РАНЬШЕ начала и уже
+    // в прошлом: событие лежало в предстоящих, а карточка утверждала, что оно
+    // завершено. Если время окончания не позже времени начала — значит переход
+    // через полночь, и дата окончания сдвигается на сутки вперёд.
+    val endsNextDay = (endHour * 60 + endMin) <= (startHour * 60 + startMin)
+
+    fun iso(h: Int, m: Int, nextDay: Boolean = false): String {
+        val date = java.time.LocalDate.of(year, month + 1, day)
+            .let { if (nextDay) it.plusDays(1) else it }
+        return "${date.year}-${pad(date.monthValue)}-${pad(date.dayOfMonth)}T${pad(h)}:${pad(m)}:00"
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -765,6 +771,25 @@ fun DateTimeWheelDialog(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    // Явно предупреждаем о переносе: иначе человек выбирает
+                    // «22:00 – 02:00» и не понимает, какого числа всё кончится
+                    if (endsNextDay) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(NexoryColors.PrimaryBlue.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Default.NightsStay, null, tint = NexoryColors.PrimaryBlue, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Мероприятие закончится на следующий день",
+                                color = NexoryColors.PrimaryBlue, fontSize = 12.sp,
+                            )
+                        }
+                    }
                 }
             }
         },
@@ -778,9 +803,11 @@ fun DateTimeWheelDialog(
                 }
             } else {
                 TextButton(onClick = {
-                    val months = listOf("янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек")
-                    val display = "$day ${months[month]} $year, ${pad(startHour)}:${pad(startMin)}–${pad(endHour)}:${pad(endMin)}"
-                    onConfirm(iso(startHour, startMin), iso(endHour, endMin), display)
+                    val startIso = iso(startHour, startMin)
+                    val endIso   = iso(endHour, endMin, nextDay = endsNextDay)
+                    // Подпись строим из готовых ISO — она обязана совпадать с тем,
+                    // что реально уходит на сервер, включая перенос на сутки
+                    onConfirm(startIso, endIso, formatEventDateTime(startIso, endIso))
                 }) {
                     Text("Готово", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold)
                 }

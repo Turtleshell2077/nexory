@@ -6,6 +6,7 @@ const fs    = require('fs');
 const app   = require('./app');
 const { initWebSocketServer } = require('./websocket/chatServer');
 const { migrate } = require('./config/migrate');
+const { purgeExpiredFriendRequests } = require('./controllers/otherControllers');
 
 // Предупреждение о небезопасных дефолтах в проде
 if (process.env.NODE_ENV === 'production') {
@@ -61,6 +62,15 @@ migrate()
         server.listen(PORT, () => {
             console.log(`✓ Nexory server running on port ${PORT}`);
         });
+
+        // Уборка просроченных заявок в друзья: на старте и раз в сутки.
+        // Запросы и так фильтруют их по дате, так что корректность не зависит
+        // от этой уборки — она лишь не даёт таблице расти без нужды.
+        const purge = () => purgeExpiredFriendRequests().catch(
+            (e) => console.error('[friends] уборка заявок не удалась:', e.message)
+        );
+        purge();
+        setInterval(purge, 24 * 60 * 60 * 1000).unref();
     });
 
 // Graceful shutdown — корректно закрываем соединения при остановке

@@ -101,6 +101,18 @@ interface NexoryApi {
     @POST("chats/direct")
     suspend fun getOrCreateDirectChat(@Body body: Map<String, String>): CreateDirectChatResponse
 
+    // Создать групповой чат: { title, memberIds: [...] }
+    @POST("chats/group")
+    suspend fun createGroupChat(@Body body: CreateGroupRequest): CreateDirectChatResponse
+
+    // Переименовать группу (только создатель)
+    @PUT("chats/{id}/title")
+    suspend fun updateChatTitle(@Path("id") chatId: String, @Body body: Map<String, String>): Map<String, String>
+
+    // Добавить участников в группу
+    @POST("chats/{id}/members")
+    suspend fun addGroupMembers(@Path("id") chatId: String, @Body body: Map<String, List<String>>): Map<String, String>
+
     // Информация о чате (заголовок, аватар)
     @GET("chats/{id}")
     suspend fun getChatInfo(@Path("id") chatId: String): ChatInfoResponse

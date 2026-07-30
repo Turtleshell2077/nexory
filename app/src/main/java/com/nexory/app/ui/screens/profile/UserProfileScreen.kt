@@ -211,7 +211,7 @@ fun UserProfileScreen(
                 Text("@${state.user?.username}", fontSize = 13.sp, color = NexoryColors.TextSecondary)
             }
             state.user?.status?.takeIf { it.isNotBlank() }?.let {
-                Text(it, fontSize = 14.sp, color = NexoryColors.LightViolet,
+                Text(it, fontSize = 14.sp, color = NexoryColors.AccentText,
                     modifier = Modifier.padding(top = 4.dp, start = 32.dp, end = 32.dp))
             }
             state.user?.bio?.takeIf { it.isNotBlank() }?.let {

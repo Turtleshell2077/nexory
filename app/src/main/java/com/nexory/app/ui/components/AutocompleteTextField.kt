@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -68,6 +69,17 @@ fun AutocompleteTextField(
     var suppressed by remember { mutableStateOf(false) }
     var fieldWidthPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
+
+    // После выбора значение считается введённым: снимаем фокус, клавиатура
+    // убирается и не закрывает собой только что добавленный элемент. Чтобы
+    // добавить следующий, пользователь снова нажимает на поле — это осознанное
+    // действие, а не случайный ввод в поле, о котором он уже забыл.
+    fun commit(action: () -> Unit) {
+        suppressed = true
+        focusManager.clearFocus()
+        action()
+    }
 
     val trimmed = value.trim()
     val canAddCustom = allowCustomValue && trimmed.isNotEmpty() &&
@@ -135,7 +147,7 @@ fun AutocompleteTextField(
                             fontSize = 14.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { suppressed = true; onSuggestionPick(item) }
+                                .clickable { commit { onSuggestionPick(item) } }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                         )
                     }
@@ -143,7 +155,7 @@ fun AutocompleteTextField(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { suppressed = true; onCustomValueAdd(trimmed) }
+                                .clickable { commit { onCustomValueAdd(trimmed) } }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

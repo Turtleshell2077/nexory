@@ -40,6 +40,12 @@ const getMyChats = async (req, res) => {
                     SELECT json_build_object('id', e.id, 'title', e.title)
                     FROM events e WHERE e.id = c.event_id
                 ) END AS event_info,
+
+                -- Название группы задаёт создатель; счётчик участников идёт в подпись
+                c.title,
+                CASE WHEN c.type = 'group' THEN (
+                    SELECT COUNT(*) FROM chat_members m WHERE m.chat_id = c.id
+                ) END AS member_count,
  
                 -- Последнее сообщение
                 (
@@ -164,6 +170,100 @@ const getOrCreateDirectChat = async (req, res) => {
     }
 };
  
+// POST /chats/group — создать групповой чат { title, memberIds: [...] }
+const createGroupChat = async (req, res) => {
+    const userId = req.user.id;
+    const title  = String(req.body.title || '').trim();
+    // Себя в списке не ждём, но если пришёл — не задваиваем
+    const memberIds = [...new Set(
+        (Array.isArray(req.body.memberIds) ? req.body.memberIds : []).filter(id => id && id !== userId)
+    )];
+
+    if (!title)              return res.status(400).json({ error: 'Введите название группы' });
+    if (title.length > 120)  return res.status(400).json({ error: 'Название до 120 символов' });
+    if (memberIds.length === 0) return res.status(400).json({ error: 'Выберите хотя бы одного участника' });
+    if (memberIds.length > 200) return res.status(400).json({ error: 'Слишком много участников' });
+
+    try {
+        const chatId = await transaction(async (client) => {
+            const chatRes = await client.query(
+                `INSERT INTO chats (type, title, creator_id) VALUES ('group', $1, $2) RETURNING id`,
+                [title, userId]
+            );
+            const id = chatRes.rows[0].id;
+
+            // Создатель + выбранные участники. Подзапрос по users отсекает
+            // несуществующие id, которые мог прислать клиент.
+            await client.query(
+                `INSERT INTO chat_members (chat_id, user_id)
+                 SELECT $1, u.id FROM users u WHERE u.id = ANY($2::uuid[])
+                 ON CONFLICT DO NOTHING`,
+                [id, [userId, ...memberIds]]
+            );
+            return id;
+        });
+
+        res.status(201).json({ chatId, isNew: true });
+    } catch (err) {
+        console.error('[createGroupChat]', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// PUT /chats/:id/title — переименовать группу (только создатель)
+const updateChatTitle = async (req, res) => {
+    const userId = req.user.id;
+    const chatId = req.params.id;
+    const title  = String(req.body.title || '').trim();
+
+    if (!title)             return res.status(400).json({ error: 'Введите название группы' });
+    if (title.length > 120) return res.status(400).json({ error: 'Название до 120 символов' });
+
+    try {
+        const r = await query(
+            `UPDATE chats SET title = $1 WHERE id = $2 AND type = 'group' AND creator_id = $3 RETURNING id`,
+            [title, chatId, userId]
+        );
+        if (r.rows.length === 0) return res.status(403).json({ error: 'Переименовать может только создатель группы' });
+        res.json({ message: 'Updated', title });
+    } catch (err) {
+        console.error('[updateChatTitle]', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// POST /chats/:id/members — добавить участников в группу { memberIds: [...] }
+const addGroupMembers = async (req, res) => {
+    const userId = req.user.id;
+    const chatId = req.params.id;
+    const memberIds = [...new Set(
+        (Array.isArray(req.body.memberIds) ? req.body.memberIds : []).filter(Boolean)
+    )];
+    if (memberIds.length === 0) return res.status(400).json({ error: 'Выберите участников' });
+
+    try {
+        // Добавлять может любой участник группы — это обычная практика для
+        // небольших компаний и не требует отдельной роли администратора
+        const member = await query(
+            `SELECT 1 FROM chat_members cm JOIN chats c ON c.id = cm.chat_id
+             WHERE cm.chat_id = $1 AND cm.user_id = $2 AND c.type = 'group'`,
+            [chatId, userId]
+        );
+        if (member.rows.length === 0) return res.status(403).json({ error: 'Forbidden' });
+
+        await query(
+            `INSERT INTO chat_members (chat_id, user_id)
+             SELECT $1, u.id FROM users u WHERE u.id = ANY($2::uuid[])
+             ON CONFLICT DO NOTHING`,
+            [chatId, memberIds]
+        );
+        res.json({ message: 'Members added' });
+    } catch (err) {
+        console.error('[addGroupMembers]', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 // GET /chats/:id — информация о чате (заголовок, аватар, тип) для шапки экрана
 const getChatInfo = async (req, res) => {
     const userId = req.user.id;
@@ -176,7 +276,7 @@ const getChatInfo = async (req, res) => {
         if (memberCheck.rows.length === 0) return res.status(403).json({ error: 'Forbidden' });
 
         const chatRes = await query(`
-            SELECT c.id, c.type, c.event_id, c.avatar_url,
+            SELECT c.id, c.type, c.event_id, c.avatar_url, c.title, c.creator_id,
                 CASE WHEN c.type = 'event' THEN (
                     SELECT title FROM events e WHERE e.id = c.event_id
                 ) END AS event_title,
@@ -197,8 +297,9 @@ const getChatInfo = async (req, res) => {
         if (chatRes.rows.length === 0) return res.status(404).json({ error: 'Chat not found' });
 
         const row = chatRes.rows[0];
-        const title  = row.type === 'event' ? (row.event_title || 'Чат мероприятия')
-                     : (row.peer?.username || 'Чат');
+        const title = row.type === 'event' ? (row.event_title || 'Чат мероприятия')
+                    : row.type === 'group' ? (row.title || 'Группа')
+                    : (row.peer?.username || 'Чат');
         const avatar = row.avatar_url || row.peer?.avatar_url || row.event_cover || null;
 
         // Участники чата
@@ -221,7 +322,12 @@ const getChatInfo = async (req, res) => {
         }
 
         res.json({
-            chat:    { id: row.id, type: row.type, title, avatar_url: avatar, can_edit_avatar: row.type !== 'direct' },
+            chat: {
+                id: row.id, type: row.type, title, avatar_url: avatar,
+                can_edit_avatar: row.type !== 'direct',
+                // Право переименовать группу есть только у создателя
+                is_owner: row.type === 'group' && row.creator_id === userId,
+            },
             members: membersRes.rows,
             event,
         });
@@ -314,4 +420,5 @@ const deleteChat = async (req, res) => {
 module.exports = {
     getMyChats, getMessages, getOrCreateDirectChat, getChatInfo,
     sendMessage, updateChatAvatar, updateChatFlags, deleteChat,
+    createGroupChat, updateChatTitle, addGroupMembers,
 };

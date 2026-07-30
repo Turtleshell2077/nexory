@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -26,6 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -39,6 +43,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import com.nexory.app.data.network.EventDto
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.components.NexoryBottomBar
@@ -49,7 +54,6 @@ import com.nexory.app.ui.screens.events.EVENT_CATEGORIES
 import com.nexory.app.ui.screens.events.SKILL_LEVELS
 import com.nexory.app.ui.screens.events.formatEventDateTime
 import com.nexory.app.ui.screens.events.formatPrice
-import com.nexory.app.ui.screens.events.isEventFinished
 import com.nexory.app.ui.theme.NexoryColors
 import kotlinx.coroutines.launch
 
@@ -97,8 +101,13 @@ fun FeedScreen(
         bottomBar = { NexoryBottomBar(navController, currentRoute = Screen.Feed.route) }
     ) { padding ->
         if (showFilters) {
+            // skipPartiallyExpanded — шторка сразу раскрывается на полный экран.
+            // В половинном состоянии прокручивать было почти некуда: поле,
+            // получившее фокус, упиралось в клавиатуру и оставалось за кадром,
+            // сколько бы scrollOnFocus ни просил его показать.
             ModalBottomSheet(
                 onDismissRequest = { showFilters = false },
+                sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 containerColor   = NexoryColors.SurfaceDark,
             ) {
                 // imePadding обязателен: внутри шторки есть поля ввода (цена, метро,
@@ -607,13 +616,17 @@ private fun InterestsFilterSection(
                 if (q.isBlank()) emptyList()
                 else allInterests.filter { it.contains(q, ignoreCase = true) && it !in selected }.take(6)
             }
-            com.nexory.app.ui.components.InterestInputRow(
-                query = query,
-                onQueryChange = { query = it },
+            // Кнопки «+» рядом с полем нет: добавить своё значение предлагает
+            // сам список подсказок последним пунктом «Добавить …», а лишний
+            // элемент управления сбоку только сужал поле ввода.
+            com.nexory.app.ui.components.AutocompleteTextField(
+                value = query,
+                onValueChange = { query = it },
                 suggestions = suggestions,
-                onPick = { onToggle(it); query = "" },
-                onAddCustom = { onAddCustom(it); query = "" },
+                onSuggestionPick = { onToggle(it); query = "" },
+                onCustomValueAdd = { onAddCustom(it); query = "" },
                 placeholder = "Начните вводить увлечение",
+                allowCustomValue = true,
             )
 
             Spacer(Modifier.height(10.dp))
@@ -695,6 +708,7 @@ private fun InterestsFilterSection(
  * Шкала нелинейная по шагу: до 1000 ₽ шаг 50, выше — 250. Мероприятия чаще
  * бесплатные или недорогие, и мелкий шаг важен именно в начале шкалы.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
     val maxLimit = 10_000
@@ -705,7 +719,15 @@ private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
     val current = maxPrice ?: maxLimit
     val isFree = maxPrice == 0
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // Подводим к клавиатуре ВЕСЬ блок цены, а не только поле ввода: рядом
+    // стоит шкала, и без неё введённая сумма ни с чем не соотносится.
+    val blockRequester = com.nexory.app.ui.components.rememberBringIntoView(active = editing)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(blockRequester)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "Цена",
@@ -713,12 +735,29 @@ private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
                 color = NexoryColors.TextPrimary, modifier = Modifier.weight(1f),
             )
             if (editing) {
+                // Открыли ввод — сразу ставим фокус, иначе пользователю пришлось бы
+                // тапать второй раз, чтобы вызвать клавиатуру
+                val focusRequester = remember { FocusRequester() }
+                LaunchedEffect(Unit) {
+                    delay(50)
+                    runCatching { focusRequester.requestFocus() }
+                }
                 OutlinedTextField(
                     value = editText,
                     onValueChange = { editText = it.filter { c -> c.isDigit() }.take(5) },
-                    // scrollOnFocus — поле уезжало под клавиатуру, и введённой
-                    // суммы не было видно. Работает в паре с imePadding у шторки.
-                    modifier = Modifier.width(130.dp).scrollOnFocus(),
+                    // scrollOnFocus здесь НЕ нужен: прокруткой занимается
+                    // blockRequester выше — он показывает поле вместе со шкалой
+                    modifier = Modifier
+                        .width(130.dp)
+                        .focusRequester(focusRequester)
+                        // Ушли с поля, не нажав «Готово» — сумму всё равно применяем,
+                        // иначе введённое молча пропадает
+                        .onFocusChanged { st ->
+                            if (!st.isFocused && editing) {
+                                onChange(editText.toIntOrNull()?.coerceIn(0, maxLimit))
+                                editing = false
+                            }
+                        },
                     singleLine = true,
                     placeholder = { Text("₽", color = NexoryColors.TextSecondary) },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -839,8 +878,9 @@ private fun FlowRowChips(items: List<String>, selected: Set<String>, onToggle: (
 
 @Composable
 fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit) {
-    // Мероприятие уже прошло — сразу видно по карточке, открывать не нужно
-    val isFinished = remember(event.startsAt, event.endsAt) { isEventFinished(event.startsAt, event.endsAt) }
+    // Отметки «Мероприятие завершено» здесь намеренно НЕТ: в ленте прошедшие
+    // и так собраны под отдельным заголовком и приглушены, а бейдж на карточке
+    // дублировал это и занимал строку. Отметка живёт на экране мероприятия.
     Card(
         modifier  = Modifier
             .fillMaxWidth()
@@ -879,19 +919,6 @@ fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit)
             Column(modifier = Modifier.padding(16.dp)) {
                 // Бейджи: организатор, цена, уровень
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
-                    if (isFinished) {
-                        Box(
-                            modifier = Modifier
-                                .background(NexoryColors.SurfaceMid, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.EventBusy, null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(11.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Мероприятие завершено", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = NexoryColors.TextSecondary)
-                            }
-                        }
-                    }
                     if (ownerBadge) {
                         Box(
                             modifier = Modifier
@@ -924,7 +951,7 @@ fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit)
                     }
                 }
                 event.category?.let {
-                    Text(it.uppercase(), fontSize = 11.sp, color = NexoryColors.LightViolet, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+                    Text(it.uppercase(), fontSize = 11.sp, color = NexoryColors.AccentText, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
                 }
                 Text(event.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = NexoryColors.TextPrimary)
                 Spacer(Modifier.height(6.dp))

@@ -30,12 +30,18 @@ private fun timeStr(dt: OffsetDateTime): String =
 private fun dateStr(dt: OffsetDateTime): String =
     "${dt.dayOfMonth} ${MONTHS_SHORT[dt.monthValue - 1]}"
 
-// "12 июн · 18:00–20:00" или "12 июн · 18:00" если нет времени окончания
+// "12 июн · 18:00–20:00", "12 июн · 18:00" без окончания,
+// "12 июн 22:00 – 13 июн 02:00" если мероприятие переходит на следующий день
 fun formatEventDateTime(startsAt: String?, endsAt: String? = null): String {
     val start = parse(startsAt) ?: return startsAt?.take(10) ?: ""
-    val end   = parse(endsAt)
-    val timePart = if (end != null) "${timeStr(start)}–${timeStr(end)}" else timeStr(start)
-    return "${dateStr(start)} · $timePart"
+    val end   = parse(endsAt)?.let { if (it.isBefore(start)) it.plusDays(1) else it }
+        ?: return "${dateStr(start)} · ${timeStr(start)}"
+    // Ночное мероприятие заканчивается уже другого числа — молча показывать
+    // «22:00–02:00» без даты значит вводить в заблуждение
+    return if (start.toLocalDate() == end.toLocalDate())
+        "${dateStr(start)} · ${timeStr(start)}–${timeStr(end)}"
+    else
+        "${dateStr(start)} ${timeStr(start)} – ${dateStr(end)} ${timeStr(end)}"
 }
 
 // "12 июн" — короткая дата для компактных мест
@@ -47,7 +53,7 @@ fun formatEventDateShort(startsAt: String?): String {
 // "18:00–20:00" — только время
 fun formatEventTimeRange(startsAt: String?, endsAt: String?): String {
     val start = parse(startsAt) ?: return ""
-    val end   = parse(endsAt)
+    val end   = parse(endsAt)?.let { if (it.isBefore(start)) it.plusDays(1) else it }
     return if (end != null) "${timeStr(start)}–${timeStr(end)}" else timeStr(start)
 }
 
@@ -75,14 +81,33 @@ private fun plural(n: Long, one: String, few: String, many: String): String {
 }
 
 /**
- * Мероприятие уже прошло? Помечает карточки в ленте и шапку на экране мероприятия.
+ * Момент, когда мероприятие действительно заканчивается.
  *
- * Ориентируемся на время ОКОНЧАНИЯ, если оно указано: пока мероприятие идёт,
- * называть его завершённым неверно — человек ещё может присоединиться. Если
- * окончание не задано, остаётся время начала.
+ * Тонкость: пикер времени долго собирал дату окончания из ТОЙ ЖЕ календарной
+ * даты, что и начало. Для мероприятия «сегодня 22:00 – завтра 02:00» это давало
+ * ends_at = сегодня 02:00, то есть РАНЬШЕ начала и уже в прошлом. Такие записи
+ * лежат в базе до сих пор, поэтому здесь мы их восстанавливаем: окончание
+ * раньше начала может значить только переход через полночь — добавляем сутки.
+ *
+ * Сам пикер тоже исправлен (см. DateTimeWheelDialog), так что новые записи
+ * приходят корректными.
+ */
+private fun finishMoment(startsAt: String?, endsAt: String?): OffsetDateTime? {
+    val start = parse(startsAt)
+    val end   = parse(endsAt)
+    if (end == null) return start
+    if (start == null) return end
+    return if (end.isBefore(start)) end.plusDays(1) else end
+}
+
+/**
+ * Мероприятие уже прошло?
+ *
+ * Ориентируемся на время ОКОНЧАНИЯ: пока мероприятие идёт, называть его
+ * завершённым неверно — человек ещё может присоединиться.
  */
 fun isEventFinished(startsAt: String?, endsAt: String? = null): Boolean {
-    val finish = parse(endsAt) ?: parse(startsAt) ?: return false
+    val finish = finishMoment(startsAt, endsAt) ?: return false
     return finish.toInstant().isBefore(java.time.Instant.now())
 }
 

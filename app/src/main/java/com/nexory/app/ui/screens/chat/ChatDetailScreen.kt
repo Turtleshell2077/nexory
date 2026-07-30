@@ -217,8 +217,7 @@ fun MessageBubble(message: MessageDto, isMyMessage: Boolean) {
                 Text(
                     text     = message.senderUsername,
                     fontSize = 11.sp,
-                    // Светлый фиолетовый теряется на белом фоне светлой темы
-                    color    = if (NexoryColors.isDark) NexoryColors.LightViolet else NexoryColors.Violet,
+                    color    = NexoryColors.AccentText,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
                 )

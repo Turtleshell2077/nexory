@@ -39,6 +39,14 @@ object NexoryColors {
     var TextPrimary:   Color by mutableStateOf(Color(0xFFF0F0F8)); private set
     var TextSecondary: Color by mutableStateOf(Color(0xFF8888AA)); private set
 
+    /**
+     * Сиреневый акцент для ТЕКСТА поверх фона (категория мероприятия, статус,
+     * имя отправителя). Отдельно от [LightViolet] потому, что светло-сиреневый
+     * хорошо читается на тёмном, а на белом почти сливается — там нужен
+     * насыщенный [Violet].
+     */
+    var AccentText: Color by mutableStateOf(LightViolet); private set
+
     fun apply(dark: Boolean) {
         isDark = dark
         if (dark) {
@@ -47,12 +55,18 @@ object NexoryColors {
             SurfaceMid    = Color(0xFF1E1E30)
             TextPrimary   = Color(0xFFF0F0F8)
             TextSecondary = Color(0xFF8888AA)
+            AccentText    = LightViolet
         } else {
-            DeepBlack     = Color(0xFFF4F5FA)  // фон
-            SurfaceDark   = Color(0xFFFFFFFF)  // карточки/панели
-            SurfaceMid    = Color(0xFFE9E9F2)  // поля ввода
-            TextPrimary   = Color(0xFF14141C)
-            TextSecondary = Color(0xFF6B6B82)
+            // Светлая тема выдержана в той же индиговой гамме, что и бренд:
+            // холодный лавандовый фон, белые карточки поверх него и глубокий
+            // сине-чёрный текст. Раньше палитра была нейтрально-серой и рядом
+            // с индиговым акцентом выглядела чужой.
+            DeepBlack     = Color(0xFFF5F4FC)  // фон экрана — лавандовый оттенок
+            SurfaceDark   = Color(0xFFFFFFFF)  // карточки и панели
+            SurfaceMid    = Color(0xFFEBE9F7)  // поля ввода, неактивные чипы
+            TextPrimary   = Color(0xFF1B1A2E)  // не чистый чёрный — мягче и в тон бренду
+            TextSecondary = Color(0xFF6E6B8A)
+            AccentText    = Violet             // светло-сиреневый на белом не читается
         }
     }
 }

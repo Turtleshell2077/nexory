@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,12 +52,45 @@ fun Modifier.scrollOnFocus(): Modifier = composed {
             wasFocused = state.isFocused
             if (gainedFocus) {
                 scope.launch {
-                    // Ждём анимацию появления клавиатуры, иначе прокрутим не туда
-                    delay(250)
+                    // Просим показать себя дважды.
+                    //
+                    // Первый запрос — быстрый отклик, пока клавиатура выезжает.
+                    // Но к этому моменту imePadding ещё не пересчитал отступ, и
+                    // прокрутка идёт по старым размерам: на невысоких экранах и
+                    // внутри модальных шторок поле всё равно оставалось закрытым.
+                    // Второй запрос приходится на момент, когда клавиатура уже
+                    // на месте и размеры окончательные.
+                    delay(120)
+                    runCatching { requester.bringIntoView() }
+                    delay(320)
                     runCatching { requester.bringIntoView() }
                 }
             }
         }
+}
+
+/**
+ * То же самое, но для ЦЕЛОГО блока, а не одного поля.
+ *
+ * Нужно там, где поле ввода бессмысленно смотреть в отрыве от соседей: у фильтра
+ * цены рядом с полем стоит шкала, и подводить к клавиатуре одно только поле —
+ * значит спрятать шкалу, ради которой пользователь сюда и пришёл.
+ *
+ * [active] — момент, когда блок нужно показать (например, открылся ввод суммы).
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun rememberBringIntoView(active: Boolean): BringIntoViewRequester {
+    val requester = remember { BringIntoViewRequester() }
+    LaunchedEffect(active) {
+        if (active) {
+            delay(120)
+            runCatching { requester.bringIntoView() }
+            delay(320)
+            runCatching { requester.bringIntoView() }
+        }
+    }
+    return requester
 }
 
 /**

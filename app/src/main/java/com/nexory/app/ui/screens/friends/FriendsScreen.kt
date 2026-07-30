@@ -109,6 +109,7 @@ fun FriendsScreen(
                         onToggleSearch = viewModel::toggleSearch,
                         onSearch = viewModel::search,
                         onAdd = viewModel::sendRequest,
+                        onAccept = viewModel::acceptRequest,
                         onChat = { friend ->
                             viewModel.openDirectChat(friend.id) { chatId ->
                                 navController.navigate(Screen.ChatDetail.route(chatId))
@@ -144,6 +145,7 @@ private fun FriendsTab(
     onToggleSearch: () -> Unit,
     onSearch: (String) -> Unit,
     onAdd: (String) -> Unit,
+    onAccept: (String) -> Unit,
     onChat: (FriendDto) -> Unit,
     onOpenFriendProfile: (FriendDto) -> Unit,
     onRemove: (String) -> Unit,
@@ -201,12 +203,21 @@ private fun FriendsTab(
                     // Ограничиваем количество превью: ник уникален, поэтому точное
                     // совпадение идёт первым (сортировка на бэкенде)
                     state.searchResults.take(5).forEach { user ->
+                        // Статус берём с сервера: он знает про уже отправленную
+                        // заявку и переживает перезапуск приложения. Локальный
+                        // sentRequests нужен лишь для мгновенной реакции на нажатие,
+                        // пока ответ сервера ещё не пришёл.
+                        val status = when {
+                            user.id == state.myUserId       -> "self"
+                            user.id in state.sentRequests   -> "pending_out"
+                            state.friends.any { it.id == user.id } -> "friends"
+                            else -> user.friendStatus ?: "none"
+                        }
                         FoundUserPreview(
                             user = user,
-                            isSelf = user.id == state.myUserId,
-                            isFriend = state.friends.any { it.id == user.id },
-                            isRequestSent = user.id in state.sentRequests,
+                            status = status,
                             onAdd = { onAdd(user.id) },
+                            onAccept = { onAccept(user.id) },
                         )
                     }
                 }
@@ -306,10 +317,9 @@ private fun FriendsTab(
 @Composable
 private fun FoundUserPreview(
     user: FriendDto,
-    isSelf: Boolean,
-    isFriend: Boolean,
-    isRequestSent: Boolean,
+    status: String,   // self | friends | pending_out | pending_in | none
     onAdd: () -> Unit,
+    onAccept: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -343,10 +353,22 @@ private fun FoundUserPreview(
 
         Spacer(Modifier.height(12.dp))
 
-        when {
-            isSelf -> PreviewStatus("Это ваш профиль", Icons.Default.Person)
-            isFriend -> PreviewStatus("Уже у вас в друзьях", Icons.Default.Check)
-            isRequestSent -> PreviewStatus("Заявка отправлена", Icons.Default.HourglassEmpty)
+        when (status) {
+            "self"     -> PreviewStatus("Это ваш профиль", Icons.Default.Person)
+            "friends"  -> PreviewStatus("Уже у вас в друзьях", Icons.Default.Check)
+            "pending_out" -> PreviewStatus("Заявка отправлена — ждём ответа", Icons.Default.HourglassEmpty)
+            // Этот человек уже позвал нас в друзья — предлагаем принять,
+            // а не отправлять встречную заявку
+            "pending_in" -> Button(
+                onClick = onAccept,
+                modifier = Modifier.fillMaxWidth().height(42.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NexoryColors.PrimaryBlue),
+            ) {
+                Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Принять заявку", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
             else -> Button(
                 onClick = onAdd,
                 modifier = Modifier.fillMaxWidth().height(42.dp),

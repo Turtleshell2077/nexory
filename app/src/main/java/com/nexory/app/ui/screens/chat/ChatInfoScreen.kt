@@ -77,6 +77,18 @@ class ChatInfoViewModel @Inject constructor(
         }
     }
 
+    /** Переименовать группу. Право проверяет сервер (только создатель). */
+    fun rename(title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            try {
+                api.updateChatTitle(chatId, mapOf("title" to trimmed))
+                _state.update { it.copy(chat = it.chat?.copy(title = trimmed)) }
+            } catch (_: Exception) {}
+        }
+    }
+
     fun changeAvatar(uri: Uri) {
         viewModelScope.launch {
             _state.update { it.copy(uploading = true) }
@@ -102,7 +114,37 @@ fun ChatInfoScreen(
     viewModel: ChatInfoViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    var showRename by remember { mutableStateOf(false) }
     LaunchedEffect(chatId) { viewModel.load(chatId) }
+
+    if (showRename) {
+        var newTitle by remember { mutableStateOf(state.chat?.title ?: "") }
+        AlertDialog(
+            onDismissRequest = { showRename = false },
+            containerColor = NexoryColors.SurfaceDark,
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("Название группы", color = NexoryColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = newTitle,
+                    onValueChange = { if (it.length <= 120) newTitle = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = com.nexory.app.ui.components.nexoryTextFieldColors(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.rename(newTitle); showRename = false },
+                    enabled = newTitle.isNotBlank(),
+                ) { Text("Сохранить", color = NexoryColors.PrimaryBlue, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRename = false }) { Text("Отмена", color = NexoryColors.TextSecondary) }
+            },
+        )
+    }
 
     val cropAvatar = com.nexory.app.ui.components.rememberImageCropper(circle = true) { cropped ->
         viewModel.changeAvatar(cropped)
@@ -141,7 +183,11 @@ fun ChatInfoScreen(
                         AsyncImage(model = state.chat?.avatarUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     } else {
                         Icon(
-                            if (state.chat?.type == "event") Icons.Default.Event else Icons.Default.Person,
+                            when (state.chat?.type) {
+                                "event" -> Icons.Default.Event
+                                "group" -> Icons.Default.Groups
+                                else    -> Icons.Default.Person
+                            },
                             null, tint = NexoryColors.TextSecondary, modifier = Modifier.size(48.dp),
                         )
                     }
@@ -165,7 +211,19 @@ fun ChatInfoScreen(
             }
 
             Spacer(Modifier.height(12.dp))
-            Text(state.chat?.title ?: "", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = NexoryColors.TextPrimary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(state.chat?.title ?: "", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = NexoryColors.TextPrimary)
+                // Название группы правит только её создатель — так решает сервер,
+                // здесь лишь показываем или прячем карандаш
+                if (state.chat?.isOwner == true) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        Icons.Default.Edit, "Переименовать",
+                        tint = NexoryColors.PrimaryBlue,
+                        modifier = Modifier.size(18.dp).clickable { showRename = true },
+                    )
+                }
+            }
             Spacer(Modifier.height(20.dp))
 
             // Карточка мероприятия (для event-чата)

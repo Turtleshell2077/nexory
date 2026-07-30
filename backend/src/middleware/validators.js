@@ -1,14 +1,13 @@
 const { body, query } = require('express-validator');
 const { normalizeUrl } = require('../utils/url');
 
-// Ссылка на покупку билета: сначала приводим ввод к каноническому виду
-// («vk.com/x» → «https://vk.com/x»), и только потом проверяем. Иначе адрес,
-// введённый без протокола, отклонялся, хотя пользователь всё указал верно.
+// Ссылка на покупку билета. Адрес указывается полностью, вместе с протоколом;
+// сервер только убирает пробелы по краям (они приезжают из буфера обмена).
 const ticketUrlRule = (chain) => chain
     .optional({ checkFalsy: true })
     .customSanitizer(normalizeUrl)
     .isURL({ protocols: ['http', 'https'], require_protocol: true })
-    .withMessage('Проверьте ссылку на билет — она должна вести на сайт, например https://timepad.ru/event/1');
+    .withMessage('Укажите полный адрес вместе с https:// — например https://timepad.ru/event/1');
 
 // Наборы правил валидации для маршрутов
 module.exports = {

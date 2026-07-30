@@ -46,6 +46,10 @@ router.delete('/events/:id', authenticate, eventsCtrl.deleteEvent);
 // ================================================================
 router.get('/chats',              authenticate, chatsCtrl.getMyChats);
 router.post('/chats/direct',      authenticate, chatsCtrl.getOrCreateDirectChat);
+// '/chats/group' объявлен ДО '/chats/:id', иначе Express примет слово group за id
+router.post('/chats/group',       authenticate, chatsCtrl.createGroupChat);
+router.put('/chats/:id/title',    authenticate, chatsCtrl.updateChatTitle);
+router.post('/chats/:id/members', authenticate, chatsCtrl.addGroupMembers);
 router.get('/chats/:id/messages', authenticate, chatsCtrl.getMessages);
 router.post('/chats/:id/messages', authenticate, v.chats.send, validate, chatsCtrl.sendMessage);
 router.put('/chats/:id/avatar',   authenticate, chatsCtrl.updateChatAvatar);

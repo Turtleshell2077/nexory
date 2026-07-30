@@ -42,6 +42,7 @@ sealed class Screen(val route: String) {
     object Support     : Screen("support")
     object Settings    : Screen("settings")
     object NewChat     : Screen("new_chat")
+    object NewGroup    : Screen("new_group")
     object Archive     : Screen("archive")
     object SelectFriends : Screen("select_friends")
     object Development : Screen("development")
@@ -203,6 +204,9 @@ fun AppNavHost(
         }
         composable(Screen.NewChat.route) {
             NewChatScreen(navController = navController)
+        }
+        composable(Screen.NewGroup.route) {
+            com.nexory.app.ui.screens.chat.NewGroupScreen(navController = navController)
         }
         composable(Screen.Archive.route) {
             ArchiveScreen(navController = navController)

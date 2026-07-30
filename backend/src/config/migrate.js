@@ -19,6 +19,7 @@ async function migrate() {
         '012_username_unique_ci.sql',
         '013_user_status.sql',
         '014_event_ticket_url.sql',
+        '015_friend_requests_groups.sql',
     ];
 
     // Неприменившиеся миграции возвращаем наверх. Раньше ошибка просто уходила
@@ -59,7 +60,8 @@ const REQUIRED_COLUMNS = [
     ['events', 'price'], ['events', 'skill_level'], ['events', 'event_type'],
     ['events', 'price_description'], ['events', 'metro'], ['events', 'ticket_url'],
     ['users', 'status'], ['users', 'profile_visibility'], ['users', 'notify_messages'],
-    ['chats', 'avatar_url'], ['chat_members', 'muted'], ['chat_members', 'archived'],
+    ['chats', 'avatar_url'], ['chats', 'title'], ['chats', 'creator_id'],
+    ['chat_members', 'muted'], ['chat_members', 'archived'],
     ['event_participants', 'role'],
 ];
 

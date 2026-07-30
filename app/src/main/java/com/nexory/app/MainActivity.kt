@@ -1,7 +1,9 @@
 package com.nexory.app
 
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -41,6 +43,21 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK  -> true
                 ThemeMode.SYSTEM -> systemDark
+            }
+
+            // Иконки статус-бара и навигации подстраиваем под ТЕМУ ПРИЛОЖЕНИЯ,
+            // а не под системную. enableEdgeToEdge() без аргументов смотрит на
+            // системную тему: при системной тёмной и выбранной в приложении
+            // светлой иконки оставались белыми — на светлом фоне их не было видно.
+            LaunchedEffect(darkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle =
+                        if (darkTheme) SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+                        else SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+                    navigationBarStyle =
+                        if (darkTheme) SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+                        else SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+                )
             }
 
             NexoryTheme(darkTheme = darkTheme) {

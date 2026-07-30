@@ -273,7 +273,7 @@ fun EventDetailScreen(
                                 Spacer(Modifier.height(10.dp))
                             }
                             event.category?.let {
-                                Text(it.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NexoryColors.LightViolet)
+                                Text(it.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = NexoryColors.AccentText)
                                 Spacer(Modifier.height(4.dp))
                             }
                             Text(event.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = NexoryColors.TextPrimary)

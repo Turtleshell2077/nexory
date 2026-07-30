@@ -29,7 +29,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 private val CATEGORIES = listOf(
     Triple(Icons.Default.AccountCircle, "Аккаунт",       NexoryColors.PrimaryBlue),
     Triple(Icons.Default.Event,         "Мероприятия",   NexoryColors.Violet),
-    Triple(Icons.Default.Chat,          "Чаты",          NexoryColors.LightViolet),
+    // Violet, а не LightViolet: светло-сиреневый на белом фоне светлой темы не читается
+    Triple(Icons.Default.Chat,          "Чаты",          NexoryColors.Violet),
     Triple(Icons.Default.BugReport,     "Баг / ошибка",  NexoryColors.Error),
 )
 
@@ -83,7 +84,7 @@ fun SupportScreen(
             text = {
                 Text(
                     "Спасибо за обращение! Приносим извинения за возможные неудобства — " +
-                        "мы обязательно во всём разберёмся и ответим в течение 24 часов.",
+                        "мы обязательно во всём разберёмся и ответим.",
                     color = NexoryColors.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
                 )
             },
@@ -138,7 +139,9 @@ fun SupportScreen(
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text("Служба поддержки", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text("Отвечаем в течение 24 часов", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                        // Обещание «в течение 24 часов» соседствовало с признанием,
+                        // что проект ведёт один человек. Формулировка честнее.
+                        Text("Читаем и отвечаем лично", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
                     }
                 }
             }
@@ -154,8 +157,15 @@ fun SupportScreen(
                 Text("Чем помочь?", color = NexoryColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Опишите проблему или задайте вопрос — мы разберёмся и ответим. " +
-                        "Ниже собраны ответы на частые вопросы: возможно, решение уже там.",
+                    "Nexory разрабатывает один человек. Приложение живое и растёт, поэтому " +
+                        "что-то может работать не так, как задумано: где-то ошибка, где-то экран " +
+                        "ведёт себя странно, где-то просто неудобно.\n\n" +
+                        "Если вы столкнулись с таким — пожалуйста, напишите. Сообщайте о любых " +
+                        "багах, ошибках и неудобствах: каждое обращение читается лично, и именно " +
+                        "из них складывается список того, что чинится и дорабатывается в первую " +
+                        "очередь. Чем подробнее опишете, что делали и что произошло, тем быстрее " +
+                        "удастся это исправить.\n\n" +
+                        "Ниже собраны ответы на частые вопросы — возможно, решение уже там.",
                     color = NexoryColors.TextSecondary, fontSize = 13.sp, lineHeight = 19.sp,
                 )
             }

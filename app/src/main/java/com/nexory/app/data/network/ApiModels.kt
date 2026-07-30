@@ -110,11 +110,21 @@ data class EventDetailResponse(
 
 // ---- Чаты ----
 
+// Тело запроса на создание группы. Отдельный класс, а не Map: memberIds —
+// список, и Map<String, String> его не выразит.
+data class CreateGroupRequest(
+    val title: String,
+    val memberIds: List<String>,
+)
+
 data class ChatDto(
     val id:       String,
-    val type:     String,         // "direct" | "event" | "support"
+    val type:     String,         // "direct" | "event" | "group" | "support"
     @SerializedName("event_id")    val eventId:    String?       = null,
     @SerializedName("avatar_url")  val avatarUrl:  String?       = null,
+    /** Название группового чата (для остальных типов пусто). */
+    val title:                     String?         = null,
+    @SerializedName("member_count") val memberCount: Int?         = null,
     val peer:                      PeerDto?        = null,   // для direct-чата
     @SerializedName("event_info")  val eventInfo:  EventInfoDto? = null, // для event-чата
     @SerializedName("last_message") val lastMessage: LastMessageDto? = null,
@@ -129,6 +139,8 @@ data class ChatInfo(
     val title:         String  = "",
     @SerializedName("avatar_url")      val avatarUrl:     String? = null,
     @SerializedName("can_edit_avatar") val canEditAvatar: Boolean = false,
+    /** Текущий пользователь — создатель группы: может её переименовать. */
+    @SerializedName("is_owner")        val isOwner:       Boolean = false,
 )
 
 data class ChatInfoResponse(
