@@ -43,7 +43,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import kotlinx.coroutines.delay
 import com.nexory.app.data.network.EventDto
 import com.nexory.app.navigation.Screen
 import com.nexory.app.ui.components.NexoryBottomBar
@@ -738,8 +737,16 @@ private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
                 // Открыли ввод — сразу ставим фокус, иначе пользователю пришлось бы
                 // тапать второй раз, чтобы вызвать клавиатуру
                 val focusRequester = remember { FocusRequester() }
+                // Поле ХОТЯ БЫ РАЗ получало фокус?
+                //
+                // Без этого флага ввод был полностью нерабочим: onFocusChanged
+                // срабатывает уже в момент появления поля, со значением
+                // isFocused = false. Проверка «фокус потерян → применить и
+                // закрыть» тут же закрывала ввод — раньше, чем requestFocus()
+                // успевал его открыть. Снаружи это выглядело так, будто в поле
+                // просто нельзя ничего написать.
+                var everFocused by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
-                    delay(50)
                     runCatching { focusRequester.requestFocus() }
                 }
                 OutlinedTextField(
@@ -753,7 +760,9 @@ private fun PriceFilter(maxPrice: Int?, onChange: (Int?) -> Unit) {
                         // Ушли с поля, не нажав «Готово» — сумму всё равно применяем,
                         // иначе введённое молча пропадает
                         .onFocusChanged { st ->
-                            if (!st.isFocused && editing) {
+                            if (st.isFocused) {
+                                everFocused = true
+                            } else if (everFocused && editing) {
                                 onChange(editText.toIntOrNull()?.coerceIn(0, maxLimit))
                                 editing = false
                             }
@@ -885,7 +894,15 @@ fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit)
         modifier  = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .then(if (ownerBadge) Modifier.border(1.5.dp, NexoryColors.PrimaryBlue.copy(alpha = 0.5f), RoundedCornerShape(16.dp)) else Modifier),
+            // Рамка своего мероприятия — акцентная; у остальных берётся CardBorder.
+            // В тёмной теме он прозрачный (карточка и так контрастна к фону),
+            // в светлой — тонкая лавандовая линия, иначе белая карточка на
+            // светлом фоне расплывается.
+            .border(
+                width = if (ownerBadge) 1.5.dp else 1.dp,
+                color = if (ownerBadge) NexoryColors.PrimaryBlue.copy(alpha = 0.5f) else NexoryColors.CardBorder,
+                shape = RoundedCornerShape(16.dp),
+            ),
         shape     = RoundedCornerShape(16.dp),
         colors    = CardDefaults.cardColors(containerColor = NexoryColors.SurfaceDark),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -928,17 +945,18 @@ fun EventCard(event: EventDto, ownerBadge: Boolean = false, onClick: () -> Unit)
                             Text("Организатор", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
+                    // Платное выделяем тёплым Accent2 — единственный не-фиолетовый
+                    // цвет в палитре, поэтому цена сразу цепляет взгляд среди
+                    // остальных бейджей
                     val free = event.price == null || event.price <= 0.0
+                    val priceColor = if (free) NexoryColors.PrimaryBlue else NexoryColors.Accent2
                     Box(
                         modifier = Modifier
-                            .background(
-                                (if (free) NexoryColors.PrimaryBlue else NexoryColors.Violet).copy(alpha = 0.18f),
-                                RoundedCornerShape(6.dp),
-                            )
+                            .background(priceColor.copy(alpha = 0.18f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     ) {
                         Text(formatPrice(event.price), fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                            color = if (free) NexoryColors.PrimaryBlue else NexoryColors.Violet)
+                            color = priceColor)
                     }
                     event.skillLevel?.takeIf { it.isNotBlank() }?.let {
                         Box(

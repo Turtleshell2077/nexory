@@ -26,11 +26,17 @@ import com.nexory.app.ui.components.scrollOnFocus
 import com.nexory.app.ui.theme.NexoryColors
 import androidx.compose.material3.ExperimentalMaterial3Api
 
-private val CATEGORIES = listOf(
+/**
+ * Категории обращения. Это ФУНКЦИЯ, а не top-level `val`, и это принципиально:
+ * значение верхнего уровня вычисляется один раз при загрузке класса и навсегда
+ * запомнило бы цвета той темы, что действовала в тот момент. При переключении
+ * на светлую тему чипы остались бы в тёмных оттенках.
+ */
+@Composable
+private fun supportCategories() = listOf(
     Triple(Icons.Default.AccountCircle, "Аккаунт",       NexoryColors.PrimaryBlue),
     Triple(Icons.Default.Event,         "Мероприятия",   NexoryColors.Violet),
-    // Violet, а не LightViolet: светло-сиреневый на белом фоне светлой темы не читается
-    Triple(Icons.Default.Chat,          "Чаты",          NexoryColors.Violet),
+    Triple(Icons.Default.Chat,          "Чаты",          NexoryColors.AccentText),
     Triple(Icons.Default.BugReport,     "Баг / ошибка",  NexoryColors.Error),
 )
 
@@ -177,7 +183,7 @@ fun SupportScreen(
                 modifier              = Modifier.fillMaxWidth().scrollOnFocus(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CATEGORIES.forEach { (icon, label, color) ->
+                supportCategories().forEach { (icon, label, color) ->
                     CategoryChip(
                         icon     = icon,
                         label    = label,
