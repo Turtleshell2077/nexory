@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,6 +9,25 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+/**
+ * Параметры релизной подписи. Лежат в keystore.properties в корне проекта —
+ * файл НЕ попадает в репозиторий (см. .gitignore), потому что содержит пароли.
+ * Образец — keystore.properties.example.
+ *
+ * Зачем это здесь. Раньше в Gradle подписи не было вовсе: `assembleRelease`
+ * выдавал НЕподписанный APK, и подписывать приходилось мастером Android Studio.
+ * Оттуда же росла путаница с ключами — отладочная сборка подписана ключом
+ * `CN=Android Debug`, релизная своим, а Android не даёт обновить приложение,
+ * если подпись сменилась: «конфликтует с другим пакетом». Теперь ключ один и
+ * задан в проекте, поэтому релизы обновляются поверх друг друга.
+ */
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystorePropsFile.exists() &&
+    keystoreProps.getProperty("storeFile")?.let { rootProject.file(it).exists() } == true
+
 android {
     namespace  = "com.nexory.app"
     compileSdk = 35
@@ -15,8 +36,8 @@ android {
         applicationId = "com.nexory.app"
         minSdk        = 26
         targetSdk     = 35
-        versionCode   = 1
-        versionName   = "1.0.0"
+        versionCode   = 2
+        versionName   = "1.2.0"
 
         // Адрес бэкенда — единственное место, где он задаётся.
         // Остальные адреса (REST, WebSocket, юр. документы) выводятся из него
@@ -25,6 +46,26 @@ android {
         //
         // ⚠️ ПЕРЕД РЕЛИЗОМ В GOOGLE PLAY заменить на https://<домен>
         buildConfigField("String", "SERVER_ORIGIN", "\"http://186.246.12.170:3000\"")
+    }
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKeystore) {
+                storeFile     = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias      = keystoreProps.getProperty("keyAlias")
+                keyPassword   = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Без keystore.properties APK останется неподписанным — это лучше,
+            // чем молча подписать отладочным ключом и получить сборку, которую
+            // невозможно поставить поверх релизной
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else null
+        }
     }
 
     buildFeatures {

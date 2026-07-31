@@ -150,6 +150,10 @@ vite.config.ts.timestamp-*
 build/
 local.properties
 package-lock.json
-build/
-local.properties
-package-lock.json
+
+# Подпись релиза. Пароли и сам ключ не должны попадать в репозиторий:
+# ключ — единственное, чем можно выпускать обновления в магазинах.
+keystore.properties
+*.jks
+*.keystore
+!keystore.properties.example

@@ -203,8 +203,19 @@ const createEvent = async (req, res) => {
         price, skill_level, event_type, price_description, metro, ticket_url
     } = req.body;
 
-    if (containsProfanity(title) || containsProfanity(description)) {
-        return res.status(400).json({ error: 'Название или описание содержит недопустимые выражения' });
+    // Говорим, КАКОЕ поле не прошло: раньше сообщение было общим на два поля,
+    // и пользователю приходилось гадать, что именно переписывать.
+    // details позволяет клиенту подсветить нужную ячейку формы.
+    const badField = containsProfanity(title) ? 'title'
+                   : containsProfanity(description) ? 'description'
+                   : null;
+    if (badField) {
+        return res.status(400).json({
+            error: badField === 'title'
+                ? 'В названии есть недопустимые выражения — поправьте текст'
+                : 'В описании есть недопустимые выражения — поправьте текст',
+            details: [{ field: badField, msg: 'Недопустимые выражения' }],
+        });
     }
 
     try {
